@@ -19,6 +19,7 @@ Node.js 22.14.0以上とpnpm 11.7.0以上を使用します。推奨バージョ
 ```bash
 pnpm install
 cp .env.example .env
+pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm test
