@@ -4,12 +4,62 @@
 
 ```mermaid
 flowchart LR
-    GHA[GitHub Actions] --> API[GitHub API]
-    API --> APP[TypeScript collector]
-    APP -->|Drizzle ORM| DB[(Neon PostgreSQL)]
-    GRAFANA[Grafana Cloud] -->|read only SQL| DB
-    VIEWER[Public viewer] --> GRAFANA
-    APP --> SLACK[Slack DM]
+    subgraph GitHub["GitHub"]
+        GHA["GitHub Actions"]
+        API["GitHub API"]
+    end
+
+    subgraph Runtime["同期実行時のみ起動"]
+        APP["TypeScript collector"]
+        DRIZZLE["Drizzle ORM"]
+    end
+
+    subgraph Data["データ保存"]
+        DB[("Neon PostgreSQL")]
+        INTERNAL["app schema"]
+        PUBLIC["dashboard schema / public views"]
+    end
+
+    subgraph Presentation["公開・通知"]
+        GRAFANA["Grafana Cloud"]
+        VIEWER["一般閲覧者"]
+        SLACK["Slack DM"]
+    end
+
+    GHA --> APP
+    APP --> API
+    APP --> DRIZZLE
+    DRIZZLE -->|"INSERT / UPDATE"| INTERNAL
+    INTERNAL --> DB
+    DB --> PUBLIC
+    GRAFANA -->|"SELECT only"| PUBLIC
+    VIEWER --> GRAFANA
+    APP --> SLACK
+```
+
+## データ反映と表示の関係
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Actions as GitHub Actions
+    participant Collector as TypeScript collector
+    participant GitHub as GitHub API
+    participant DB as Neon PostgreSQL
+    participant Slack as Slack
+    participant Grafana as Grafana Cloud
+    participant Viewer as 一般閲覧者
+
+    Actions->>Collector: 定期・手動同期を開始
+    Collector->>GitHub: コミット・PR・Issueを取得
+    GitHub-->>Collector: GitHubイベント
+    Collector->>DB: Drizzleで冪等Upsert
+    Collector->>DB: 同期結果を記録
+    Collector->>Slack: 成功・失敗をDM
+    Viewer->>Grafana: ダッシュボードを表示
+    Grafana->>DB: 公開ViewをSELECT
+    DB-->>Grafana: 期間別集計結果
+    Grafana-->>Viewer: グラフ・完了Issueを表示
 ```
 
 ## 採用技術

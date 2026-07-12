@@ -13,6 +13,94 @@
 - `dashboard`: Grafanaへ公開するView
 - Grafana専用ユーザーには`dashboard` SchemaのViewへの`SELECT`のみを許可する
 
+```mermaid
+flowchart LR
+    COLLECTOR["Collector DB user"] -->|"SELECT / INSERT / UPDATE"| APP["app schema"]
+    APP --> EVENTS[("イベントテーブル")]
+    EVENTS --> VIEWS["dashboard schema / views"]
+    GRAFANA["Grafana read-only user"] -->|"SELECT only"| VIEWS
+    GRAFANA -. "アクセス不可" .-> APP
+    VIEWER["一般閲覧者"] --> CLOUD["Grafana Cloud"]
+    CLOUD --> GRAFANA
+```
+
+## ER図
+
+```mermaid
+erDiagram
+    TRACKED_ACTORS {
+        bigint github_user_id PK
+        text github_login
+        text actor_type
+        boolean enabled
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    REPOSITORIES {
+        bigint github_repository_id PK
+        bigint owner_github_user_id
+        text visibility
+        text default_branch
+        boolean is_fork
+        boolean is_archived
+        boolean enabled
+        timestamptz last_synced_at
+    }
+
+    COMMITS {
+        bigint repository_id PK, FK
+        text sha PK
+        bigint author_github_user_id FK
+        timestamptz committed_at
+        timestamptz first_seen_at
+        timestamptz last_seen_at
+    }
+
+    PULL_REQUESTS {
+        text github_node_id PK
+        bigint repository_id FK
+        integer number
+        bigint author_github_user_id FK
+        timestamptz created_at
+        timestamptz merged_at
+        text state
+        timestamptz first_seen_at
+        timestamptz last_seen_at
+    }
+
+    COMPLETED_ISSUES {
+        text github_node_id PK
+        bigint repository_id FK
+        integer number
+        text title
+        timestamptz first_closed_at
+        boolean matched_by_author
+        boolean matched_by_closing_pr
+        text visibility
+        timestamptz last_seen_at
+    }
+
+    SYNC_RUNS {
+        bigint id PK
+        text trigger_type
+        text sync_mode
+        text status
+        timestamptz started_at
+        timestamptz finished_at
+        integer repository_total
+        integer repository_succeeded
+        integer repository_failed
+        text notification_status
+    }
+
+    TRACKED_ACTORS ||--o{ COMMITS : "authors"
+    TRACKED_ACTORS ||--o{ PULL_REQUESTS : "authors"
+    REPOSITORIES ||--o{ COMMITS : "contains"
+    REPOSITORIES ||--o{ PULL_REQUESTS : "contains"
+    REPOSITORIES ||--o{ COMPLETED_ISSUES : "contains"
+```
+
 ## テーブル
 
 ### `app.tracked_actors`

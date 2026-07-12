@@ -13,6 +13,27 @@
 
 ## 処理フロー
 
+```mermaid
+flowchart TD
+    START(["同期開始"]) --> VALIDATE["入力・Secretsを検証"]
+    VALIDATE --> RUN["sync_runsを開始"]
+    RUN --> REPOS["mytysoldier/* を取得"]
+    REPOS --> FILTER["Organization / Fork / Archivedを除外"]
+    FILTER --> NEXT{"未処理リポジトリがある?"}
+    NEXT -->|"Yes"| TX["リポジトリ単位でTransaction開始"]
+    TX --> FETCH["Commit / PR / Issueを取得"]
+    FETCH --> UPSERT["GitHub ID / SHAでUpsert"]
+    UPSERT --> COMMIT["Transaction Commit"]
+    COMMIT --> NEXT
+    FETCH -->|"失敗"| ROLLBACK["Transaction Rollback"]
+    ROLLBACK --> RECORD["失敗件数を記録"]
+    RECORD --> NEXT
+    NEXT -->|"No"| RESULT["success / partial_failure / failureを確定"]
+    RESULT --> SAVE["sync_runsを完了"]
+    SAVE --> NOTIFY["Slack DMを試行"]
+    NOTIFY --> END(["同期終了"])
+```
+
 1. 実行条件を検証して`sync_runs`を開始する
 2. `mytysoldier/*`のリポジトリ一覧を取得する
 3. Organization、Fork、Archivedを除外する
@@ -24,6 +45,13 @@
 9. Slack DMを送信する
 
 ## 差分同期
+
+```mermaid
+flowchart LR
+    OVERLAP["前回成功の48時間前<br/>再取得開始"] --> PREVIOUS["前回成功時刻<br/>前回までの確定範囲"]
+    PREVIOUS --> CURRENT["今回実行時刻<br/>再取得終了"]
+    OVERLAP -. "同じイベントはUpsertで重複排除" .-> CURRENT
+```
 
 最終成功時刻以降だけを取得するとAPI反映遅延や途中失敗で漏れるため、通常同期では48時間重ねて再取得する。GitHub ID／SHAの一意制約とUpsertにより二重計上を防ぐ。
 
@@ -39,6 +67,18 @@
 - Slackや公開Viewへ失敗リポジトリ名を出さない
 
 ## Issue同期
+
+```mermaid
+flowchart TD
+    CLOSED["Closed Issue"] --> AUTHOR{"作成者がtracked actor?"}
+    AUTHOR -->|"Yes"| TARGET["完了IssueとしてUpsert"]
+    AUTHOR -->|"No"| CLOSING{"tracked actorのPRによる<br/>closing relationship?"}
+    CLOSING -->|"Yes"| TARGET
+    CLOSING -->|"No"| SKIP["集計対象外"]
+    TARGET --> EXISTS{"既に保存済み?"}
+    EXISTS -->|"No"| FIRST["最初のclosed_atとタイトルを保存"]
+    EXISTS -->|"Yes"| UPDATE["タイトルのみ更新<br/>first_closed_atは維持"]
+```
 
 - author条件とPR Close条件をORで判定する
 - GitHubがclosing relationshipとして返すPRのみを使用する
