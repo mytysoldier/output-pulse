@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-import { createApplicationInfo } from '../src/index.js';
+import { createApplicationInfo } from "../src/index.js";
 
-describe('createApplicationInfo', () => {
-  it('returns the fixed application metadata', () => {
+describe("createApplicationInfo", () => {
+  it("returns the fixed application metadata", () => {
     expect(createApplicationInfo()).toEqual({
-      name: 'output-pulse',
-      runtime: 'node',
+      name: "output-pulse",
+      runtime: "node",
     });
   });
 });
