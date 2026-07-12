@@ -1,4 +1,33 @@
-# ai-dev-template
+# Output Pulse
+
+GitHub上の個人開発実績を定期収集し、Grafana Cloudで一般公開する個人用ダッシュボードです。
+
+現在はMVPの設計段階です。要件と技術設計は以下を参照してください。
+
+- [要件定義](docs/requirements.md)
+- [アーキテクチャ](docs/architecture.md)
+- [データベース設計](docs/database-design.md)
+- [同期仕様](docs/synchronization.md)
+- [セキュリティ設計](docs/security.md)
+- [運用設計](docs/operations.md)
+- [DBマイグレーション手順](docs/database-migrations.md)
+- [実装Issue分解](docs/implementation-plan.md)
+
+## DBマイグレーション概要
+
+DBスキーマはDrizzle ORMで定義し、Drizzle KitでSQLマイグレーションを生成・適用します。本番DBへの適用はGitHub Actionsの手動Workflowから行い、定期同期Workflowではマイグレーションしません。
+
+```bash
+# マイグレーションSQL生成
+pnpm db:generate
+
+# ローカルPostgreSQLへ適用
+pnpm db:migrate
+```
+
+コマンドは実装Issueで追加予定です。レビュー、本番適用、失敗時対応の詳細は[DBマイグレーション手順](docs/database-migrations.md)を参照してください。
+
+## 開発方針
 
 AIエージェントを中心に、GitHub Issueでタスクを管理しながら個人開発を進めるためのテンプレートです。
 
