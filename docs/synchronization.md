@@ -50,7 +50,7 @@ flowchart TD
 flowchart LR
     OVERLAP["前回成功の48時間前<br/>再取得開始"] --> PREVIOUS["前回成功時刻<br/>前回までの確定範囲"]
     PREVIOUS --> CURRENT["今回実行時刻<br/>再取得終了"]
-    OVERLAP -. "同じイベントはUpsertで重複排除" .-> CURRENT
+    OVERLAP -.->|"同じイベントはUpsertで重複排除"| CURRENT
 ```
 
 最終成功時刻以降だけを取得するとAPI反映遅延や途中失敗で漏れるため、通常同期では48時間重ねて再取得する。GitHub ID／SHAの一意制約とUpsertにより二重計上を防ぐ。

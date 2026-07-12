@@ -19,7 +19,7 @@ flowchart LR
     APP --> EVENTS[("イベントテーブル")]
     EVENTS --> VIEWS["dashboard schema / views"]
     GRAFANA["Grafana read-only user"] -->|"SELECT only"| VIEWS
-    GRAFANA -. "アクセス不可" .-> APP
+    GRAFANA -.->|"アクセス不可"| APP
     VIEWER["一般閲覧者"] --> CLOUD["Grafana Cloud"]
     CLOUD --> GRAFANA
 ```
