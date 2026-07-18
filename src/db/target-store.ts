@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { repositories, trackedActors } from "./schema/index.js";
@@ -53,11 +53,11 @@ export function createTargetStore(database: NodePgDatabase): TargetStore {
         .onConflictDoUpdate({
           target: repositories.githubRepositoryId,
           set: {
-            ownerGithubUserId: repositories.ownerGithubUserId,
-            visibility: repositories.visibility,
-            defaultBranch: repositories.defaultBranch,
-            isFork: repositories.isFork,
-            isArchived: repositories.isArchived,
+            ownerGithubUserId: sql`excluded.${sql.identifier(repositories.ownerGithubUserId.name)}`,
+            visibility: sql`excluded.${sql.identifier(repositories.visibility.name)}`,
+            defaultBranch: sql`excluded.${sql.identifier(repositories.defaultBranch.name)}`,
+            isFork: sql`excluded.${sql.identifier(repositories.isFork.name)}`,
+            isArchived: sql`excluded.${sql.identifier(repositories.isArchived.name)}`,
           },
         });
     },
