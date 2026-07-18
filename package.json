@@ -1,0 +1,28 @@
+{
+  "name": "output-pulse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub開発実績を収集して可視化する個人用ダッシュボード",
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.14.0",
+    "pnpm": ">=11.7.0"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.3",
+    "@types/node": "^22.20.1",
+    "typescript": "7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
