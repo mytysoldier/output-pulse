@@ -35,7 +35,7 @@ pnpm test
 pnpm build
 ```
 
-コマンドとディレクトリは初期構築Issueで実装し、実装後に本書を実態へ合わせて更新する。
+`pnpm db:generate`はSchemaとの差分からMigration SQLを生成する。`pnpm db:check`はMigration履歴とSchemaの整合性を確認する。`pnpm db:migrate`は`.env`の`DATABASE_MIGRATION_URL`を優先し、未設定時は`DATABASE_URL`へ初期Migrationを適用する。`app` Schemaの作成など、Drizzleが自動生成しないSQLはMigrationファイルへ明示的に追加する。
 
 ## SQLレビュー観点
 
