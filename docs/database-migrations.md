@@ -22,7 +22,7 @@ pnpm db:generate
 5. ローカルPostgreSQLへ適用する
 
 ```bash
-docker compose up -d db
+docker compose up -d postgres
 pnpm db:migrate
 ```
 

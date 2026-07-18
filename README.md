@@ -28,6 +28,42 @@ pnpm build
 
 `.env`には秘密情報を保存し、Gitへコミットしないでください。各環境変数の利用開始は後続Issueで実装します。
 
+## ローカルPostgreSQL
+
+Docker Desktopなど、Docker Compose v2を利用できる環境が必要です。本番Neonへの接続は不要です。
+
+`.env`を用意したうえで、開発用PostgreSQLを起動します。
+
+```bash
+cp .env.example .env
+docker compose up -d postgres
+```
+
+起動完了はhealthcheckで確認できます。
+
+```bash
+docker compose ps
+docker compose exec postgres pg_isready -U output_pulse -d output_pulse
+```
+
+ローカルからの接続は、次のコマンドで確認できます。
+
+```bash
+docker compose exec postgres psql -U output_pulse -d output_pulse -c 'SELECT current_database(), current_user;'
+```
+
+停止してもデータは名前付きVolumeに保持されます。再開する場合は、再度`docker compose up -d postgres`を実行してください。
+
+```bash
+docker compose stop postgres
+```
+
+ローカルデータを完全に初期化したい場合だけ、次を実行します。この操作はVolume内のデータを削除します。
+
+```bash
+docker compose down -v
+```
+
 ## 開発方針
 
 AIエージェントを中心に、GitHub Issueでタスクを管理しながら個人開発を進めるためのテンプレートです。
