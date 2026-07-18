@@ -8,6 +8,7 @@
     "noUnusedParameters": true,
     "strict": true,
     "target": "ES2024",
+    "lib": ["ES2024"],
     "types": ["node", "vitest/globals"],
     "verbatimModuleSyntax": true
   },
