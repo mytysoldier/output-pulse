@@ -18,11 +18,16 @@ const ownerRepository: GitHubRepository = {
   isArchived: false,
 };
 
-function createStore(): TargetStore & {
+function createStore(disabledRepositoryIds = new Set<number>()): TargetStore & {
   persistedRepositories: Parameters<TargetStore["upsertRepositories"]>[0];
 } {
   return {
     persistedRepositories: [],
+    async listEnabledRepositoryIds() {
+      return this.persistedRepositories
+        .filter((repository) => !disabledRepositoryIds.has(repository.githubRepositoryId))
+        .map((repository) => repository.githubRepositoryId);
+    },
     async listEnabledTrackedActors() {
       return [
         { githubUserId: 1, githubLogin: "mytysoldier", actorType: "user" },
@@ -90,6 +95,20 @@ describe("loadSynchronizationTargets", () => {
       ]),
     );
     expect(store.persistedRepositories[0]).not.toHaveProperty("name");
+  });
+
+  it("does not return repositories disabled in the database", async () => {
+    const api: GitHubRepositoryApi = {
+      async listOwnedRepositoriesPage() {
+        return { rateLimit: {}, repositories: [ownerRepository] };
+      },
+    };
+    const store = createStore(new Set([ownerRepository.id]));
+
+    const targets = await loadSynchronizationTargets({ api, store });
+
+    expect(store.persistedRepositories).toHaveLength(1);
+    expect(targets.repositories).toEqual([]);
   });
 
   it("returns a sanitized typed error when GitHub rejects a request", async () => {

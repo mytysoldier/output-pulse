@@ -19,12 +19,22 @@ export interface TrackedActor {
 }
 
 export interface TargetStore {
+  listEnabledRepositoryIds(): Promise<number[]>;
   listEnabledTrackedActors(): Promise<TrackedActor[]>;
   upsertRepositories(repositories: PersistedRepository[]): Promise<void>;
 }
 
 export function createTargetStore(database: NodePgDatabase): TargetStore {
   return {
+    async listEnabledRepositoryIds() {
+      const enabledRepositories = await database
+        .select({ githubRepositoryId: repositories.githubRepositoryId })
+        .from(repositories)
+        .where(eq(repositories.enabled, true));
+
+      return enabledRepositories.map((repository) => repository.githubRepositoryId);
+    },
+
     async listEnabledTrackedActors() {
       const actors = await database
         .select({

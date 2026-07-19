@@ -126,11 +126,18 @@ export async function loadSynchronizationTargets({
   const { rateLimit, repositories } = await listTargetRepositories(api, owner);
 
   await store.upsertRepositories(repositories.map(toPersistedRepository));
+  const [enabledRepositoryIds, trackedActors] = await Promise.all([
+    store.listEnabledRepositoryIds(),
+    store.listEnabledTrackedActors(),
+  ]);
+  const enabledRepositoryIdSet = new Set(enabledRepositoryIds);
 
   return {
     rateLimit,
-    repositories,
-    trackedActors: await store.listEnabledTrackedActors(),
+    repositories: repositories.filter((repository) =>
+      enabledRepositoryIdSet.has(repository.githubRepositoryId),
+    ),
+    trackedActors,
   };
 }
 
