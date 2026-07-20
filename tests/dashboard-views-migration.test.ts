@@ -43,6 +43,8 @@ describe("Grafana dashboard migration", () => {
   it("grants Grafana only SELECT access to the dashboard views", async () => {
     const migration = await readMigration();
 
+    expect(migration).toContain("CREATE ROLE grafana_reader NOLOGIN;");
+    expect(migration).not.toMatch(/ALTER ROLE\s+grafana_reader\b/i);
     expect(migration).toContain('REVOKE ALL PRIVILEGES ON SCHEMA "app" FROM grafana_reader;');
     expect(migration).toContain(
       'REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" FROM grafana_reader;',

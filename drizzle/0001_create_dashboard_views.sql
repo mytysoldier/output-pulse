@@ -72,8 +72,6 @@ EXCEPTION
 END
 $$;
 --> statement-breakpoint
-ALTER ROLE grafana_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
---> statement-breakpoint
 REVOKE ALL PRIVILEGES ON SCHEMA "app" FROM grafana_reader;
 --> statement-breakpoint
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA "app" FROM grafana_reader;
