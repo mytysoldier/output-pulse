@@ -6,7 +6,6 @@ import type { GitHubRateLimit, TargetRepository } from "./targets.js";
 import { GitHubApiError } from "./targets.js";
 
 const CLOSED_ISSUES_PER_PAGE = 100;
-const CLOSING_PULL_REQUESTS_PER_ISSUE = 100;
 
 const CLOSED_ISSUES_QUERY = `
   query ListClosedIssues($owner: String!, $repository: String!, $cursor: String) {
@@ -21,11 +20,17 @@ const CLOSED_ISSUES_QUERY = `
             ... on User { databaseId }
             ... on Bot { databaseId }
           }
-          closedByPullRequestsReferences(first: ${CLOSING_PULL_REQUESTS_PER_ISSUE}, includeClosedPrs: true) {
+          timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
             nodes {
-              author {
-                ... on User { databaseId }
-                ... on Bot { databaseId }
+              ... on ClosedEvent {
+                closer {
+                  ... on PullRequest {
+                    author {
+                      ... on User { databaseId }
+                      ... on Bot { databaseId }
+                    }
+                  }
+                }
               }
             }
           }
@@ -78,8 +83,10 @@ interface ClosedIssuesQueryResponse {
       nodes: Array<{
         author: GitHubActor | null;
         closedAt: string | null;
-        closedByPullRequestsReferences: {
-          nodes: Array<{ author: GitHubActor | null }>;
+        timelineItems: {
+          nodes: Array<{
+            closer: { author: GitHubActor | null } | null;
+          }>;
         };
         id: string;
         number: number;
@@ -220,12 +227,10 @@ function toGitHubCompletedIssue(issue: ClosedIssueNode): GitHubCompletedIssue[] 
     {
       authorGithubUserId: issue.author?.databaseId ?? null,
       closedAt: new Date(issue.closedAt),
-      closingPullRequestAuthorGithubUserIds: issue.closedByPullRequestsReferences.nodes.flatMap(
-        (pullRequest) => {
-          const databaseId = pullRequest.author?.databaseId;
-          return databaseId === undefined || databaseId === null ? [] : [databaseId];
-        },
-      ),
+      closingPullRequestAuthorGithubUserIds: issue.timelineItems.nodes.flatMap((closedEvent) => {
+        const databaseId = closedEvent.closer?.author?.databaseId;
+        return databaseId === undefined || databaseId === null ? [] : [databaseId];
+      }),
       githubNodeId: issue.id,
       number: issue.number,
       title: issue.title,

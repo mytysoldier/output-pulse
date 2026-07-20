@@ -72,7 +72,7 @@ describe("synchronizeCompletedIssues", () => {
                 {
                   author: { databaseId: 1 },
                   closedAt: "2026-07-01T00:00:00Z",
-                  closedByPullRequestsReferences: { nodes: [{ author: { databaseId: 2 } }] },
+                  timelineItems: { nodes: [{ closer: { author: { databaseId: 2 } } }] },
                   id: "I_node_1",
                   number: 10,
                   title: "完了したIssue",
@@ -95,6 +95,39 @@ describe("synchronizeCompletedIssues", () => {
       authorGithubUserId: 1,
       closingPullRequestAuthorGithubUserIds: [2],
     });
+  });
+
+  it("does not treat a referenced but non-closing pull request as a closer", async () => {
+    const client = {
+      async graphql() {
+        return {
+          rateLimit: { remaining: 4999, resetAt: null },
+          repository: {
+            issues: {
+              nodes: [
+                {
+                  author: { databaseId: 3 },
+                  closedAt: "2026-07-01T00:00:00Z",
+                  id: "I_node_1",
+                  number: 10,
+                  timelineItems: { nodes: [{ closer: null }] },
+                  title: "完了したIssue",
+                },
+              ],
+              pageInfo: { endCursor: null, hasNextPage: false },
+            },
+          },
+        };
+      },
+    };
+
+    const api = createGitHubCompletedIssueApi(client as never);
+    const page = await api.listClosedIssuesPage({
+      owner: "mytysoldier",
+      repository: "private-project",
+    });
+
+    expect(page.issues[0]?.closingPullRequestAuthorGithubUserIds).toEqual([]);
   });
 
   it("saves issues matched by each OR condition exactly once", async () => {
