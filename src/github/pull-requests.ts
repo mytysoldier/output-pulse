@@ -41,6 +41,10 @@ export interface PullRequestSynchronizationResult {
   savedCount: number;
 }
 
+/**
+ * Octokitを利用して、1ページ分のPull Requestを取得するAPIアダプターを作成する。
+ * GitHub APIのレスポンスを同期処理で扱う型へ変換し、APIエラーを統一する。
+ */
 export function createGitHubPullRequestApi(client: Octokit): GitHubPullRequestApi {
   return {
     async listPullRequestsPage({ owner, repository, page, perPage }) {
@@ -71,6 +75,10 @@ export function createGitHubPullRequestApi(client: Octokit): GitHubPullRequestAp
   };
 }
 
+/**
+ * 対象リポジトリのPull Requestを全ページ取得し、tracked actor作成分だけを保存する。
+ * 取得件数、保存件数、最後に取得したレート制限情報を返す。
+ */
 export async function synchronizePullRequests({
   api,
   repository,
@@ -103,6 +111,10 @@ export async function synchronizePullRequests({
   };
 }
 
+/**
+ * 指定リポジトリのPull Requestをページネーションで全件取得する。
+ * 最後に取得したページのレート制限情報とともに返す。
+ */
 async function listPullRequests(
   api: GitHubPullRequestApi,
   repository: TargetRepository,
@@ -136,6 +148,10 @@ async function listPullRequests(
   }
 }
 
+/**
+ * GitHub APIのPull Requestを、DBへUpsertできる保存形式へ変換する。
+ * マージ日時があるPull Requestは状態を常にmergedとして扱う。
+ */
 function toPersistedPullRequest({
   pullRequest,
   repository,
@@ -158,6 +174,9 @@ function toPersistedPullRequest({
   };
 }
 
+/**
+ * GitHub APIレスポンスのレート制限ヘッダーをアプリケーション用の値へ変換する。
+ */
 function getRateLimit(headers: Record<string, string | number | undefined>): GitHubRateLimit {
   const remaining = parseHeaderNumber(headers["x-ratelimit-remaining"]);
   const reset = parseHeaderNumber(headers["x-ratelimit-reset"]);
@@ -168,6 +187,9 @@ function getRateLimit(headers: Record<string, string | number | undefined>): Git
   };
 }
 
+/**
+ * レート制限ヘッダーの数値を安全に解析し、無効な値は未設定として扱う。
+ */
 function parseHeaderNumber(value: number | string | undefined): number | undefined {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : undefined;
@@ -181,6 +203,9 @@ function parseHeaderNumber(value: number | string | undefined): number | undefin
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+/**
+ * 不明な例外を、公開しても安全なGitHub APIエラーへ正規化する。
+ */
 function toGitHubApiError(error: unknown): GitHubApiError {
   if (error instanceof GitHubApiError) {
     return error;
