@@ -46,6 +46,22 @@ function createStore(): PullRequestStore & { pullRequests: Map<string, Persisted
         });
       }
     },
+    async refreshPullRequests(pullRequests) {
+      let updatedCount = 0;
+      for (const pullRequest of pullRequests) {
+        const existing = this.pullRequests.get(pullRequest.githubNodeId);
+        if (existing !== undefined) {
+          this.pullRequests.set(pullRequest.githubNodeId, {
+            ...existing,
+            lastSeenAt: pullRequest.lastSeenAt,
+            mergedAt: pullRequest.mergedAt,
+            state: pullRequest.state,
+          });
+          updatedCount += 1;
+        }
+      }
+      return { insertedCount: 0, updatedCount };
+    },
   };
 }
 
@@ -194,6 +210,49 @@ describe("synchronizePullRequests", () => {
 
     expect(result).toMatchObject({ fetchedCount: 4, savedCount: 1 });
     expect([...store.pullRequests.keys()]).toEqual(["PR_node_in_range"]);
+  });
+
+  it("updates an existing PR merged in the period without inserting its older creation metric", async () => {
+    const store = createStore();
+    await store.upsertPullRequests([
+      {
+        ...trackedOpenPullRequest,
+        authorGithubUserId: 1,
+        firstSeenAt: new Date("2026-06-01T00:00:00Z"),
+        lastSeenAt: new Date("2026-06-01T00:00:00Z"),
+        repositoryId: 101,
+      },
+    ]);
+    const api: GitHubPullRequestApi = {
+      async listPullRequestsPage() {
+        return {
+          pullRequests: [
+            {
+              ...trackedOpenPullRequest,
+              createdAt: new Date("2026-06-01T00:00:00Z"),
+              mergedAt: new Date("2026-07-03T00:00:00Z"),
+              state: "closed",
+            },
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+
+    const result = await synchronizePullRequests({
+      api,
+      repository,
+      since: new Date("2026-07-02T00:00:00Z"),
+      store,
+      trackedActors,
+      until: new Date("2026-07-04T00:00:00Z"),
+    });
+
+    expect(result).toMatchObject({ insertedCount: 0, savedCount: 1, updatedCount: 1 });
+    expect(store.pullRequests.get("PR_node_1")).toMatchObject({
+      mergedAt: new Date("2026-07-03T00:00:00Z"),
+      state: "merged",
+    });
   });
 
   it("returns a sanitized typed error when GitHub rejects a request", async () => {

@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { pullRequests } from "./schema/index.js";
@@ -17,6 +17,7 @@ export interface PersistedPullRequest {
 }
 
 export interface PullRequestStore {
+  refreshPullRequests?(pullRequests: PersistedPullRequest[]): Promise<UpsertResult | undefined>;
   upsertPullRequests(pullRequests: PersistedPullRequest[]): Promise<UpsertResult | undefined>;
 }
 
@@ -47,6 +48,28 @@ export function createPullRequestStore(database: NodePgDatabase): PullRequestSto
         .returning({ inserted: sql<boolean>`xmax = 0` });
 
       return countUpserts(results);
+    },
+
+    async refreshPullRequests(refreshedPullRequests) {
+      if (refreshedPullRequests.length === 0) {
+        return { insertedCount: 0, updatedCount: 0 };
+      }
+
+      const results = await Promise.all(
+        refreshedPullRequests.map((pullRequest) =>
+          database
+            .update(pullRequests)
+            .set({
+              lastSeenAt: pullRequest.lastSeenAt,
+              mergedAt: pullRequest.mergedAt,
+              state: pullRequest.state,
+            })
+            .where(eq(pullRequests.githubNodeId, pullRequest.githubNodeId))
+            .returning({ githubNodeId: pullRequests.githubNodeId }),
+        ),
+      );
+
+      return { insertedCount: 0, updatedCount: results.flat().length };
     },
   };
 }

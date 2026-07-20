@@ -110,17 +110,32 @@ export async function synchronizePullRequests({
     )
     .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
 
+  const refreshedPullRequests = result.pullRequests
+    .filter(
+      (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
+        pullRequest.authorGithubUserId !== null &&
+        trackedActorIds.has(pullRequest.authorGithubUserId) &&
+        isMergeRefreshCandidate(pullRequest, since, until),
+    )
+    .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
+
   const persistence = toUpsertResult(
     await store.upsertPullRequests(synchronizedPullRequests),
     synchronizedPullRequests.length,
+  );
+  const refresh = toUpsertResult(
+    store.refreshPullRequests === undefined
+      ? undefined
+      : await store.refreshPullRequests(refreshedPullRequests),
+    0,
   );
 
   return {
     fetchedCount: result.pullRequests.length,
     insertedCount: persistence.insertedCount,
     rateLimit: result.rateLimit,
-    savedCount: synchronizedPullRequests.length,
-    updatedCount: persistence.updatedCount,
+    savedCount: persistence.insertedCount + persistence.updatedCount + refresh.updatedCount,
+    updatedCount: persistence.updatedCount + refresh.updatedCount,
   };
 }
 
@@ -136,6 +151,18 @@ function isWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Da
   return (
     isWithinRange(pullRequest.createdAt, since, until) &&
     (pullRequest.mergedAt === null || isWithinRange(pullRequest.mergedAt, since, until))
+  );
+}
+
+function isMergeRefreshCandidate(
+  pullRequest: GitHubPullRequest,
+  since?: Date,
+  until?: Date,
+): boolean {
+  return (
+    pullRequest.mergedAt !== null &&
+    !isWithinRange(pullRequest.createdAt, since, until) &&
+    isWithinRange(pullRequest.mergedAt, since, until)
   );
 }
 
