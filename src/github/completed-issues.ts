@@ -17,9 +17,17 @@ const CLOSED_ISSUES_QUERY = `
           number
           title
           closedAt
-          author { databaseId }
+          author {
+            ... on User { databaseId }
+            ... on Bot { databaseId }
+          }
           closedByPullRequestsReferences(first: ${CLOSING_PULL_REQUESTS_PER_ISSUE}, includeClosedPrs: true) {
-            nodes { author { databaseId } }
+            nodes {
+              author {
+                ... on User { databaseId }
+                ... on Bot { databaseId }
+              }
+            }
           }
         }
         pageInfo { hasNextPage endCursor }
@@ -68,10 +76,10 @@ interface ClosedIssuesQueryResponse {
   repository: {
     issues: {
       nodes: Array<{
-        author: { databaseId: number | null } | null;
+        author: GitHubActor | null;
         closedAt: string | null;
         closedByPullRequestsReferences: {
-          nodes: Array<{ author: { databaseId: number | null } | null }>;
+          nodes: Array<{ author: GitHubActor | null }>;
         };
         id: string;
         number: number;
@@ -80,6 +88,10 @@ interface ClosedIssuesQueryResponse {
       pageInfo: { endCursor: string | null; hasNextPage: boolean };
     };
   } | null;
+}
+
+interface GitHubActor {
+  databaseId?: number | null;
 }
 
 type ClosedIssueNode = NonNullable<
@@ -209,10 +221,10 @@ function toGitHubCompletedIssue(issue: ClosedIssueNode): GitHubCompletedIssue[] 
       authorGithubUserId: issue.author?.databaseId ?? null,
       closedAt: new Date(issue.closedAt),
       closingPullRequestAuthorGithubUserIds: issue.closedByPullRequestsReferences.nodes.flatMap(
-        (pullRequest) =>
-          pullRequest.author?.databaseId === null || pullRequest.author === null
-            ? []
-            : [pullRequest.author.databaseId],
+        (pullRequest) => {
+          const databaseId = pullRequest.author?.databaseId;
+          return databaseId === undefined || databaseId === null ? [] : [databaseId];
+        },
       ),
       githubNodeId: issue.id,
       number: issue.number,

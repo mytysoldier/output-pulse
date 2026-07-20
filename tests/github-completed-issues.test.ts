@@ -6,6 +6,7 @@ import type {
 } from "../src/db/completed-issue-store.js";
 import type { TrackedActor } from "../src/db/target-store.js";
 import {
+  createGitHubCompletedIssueApi,
   type GitHubCompletedIssue,
   type GitHubCompletedIssueApi,
   synchronizeCompletedIssues,
@@ -58,6 +59,44 @@ function createStore(): CompletedIssueStore & { issues: Map<string, PersistedCom
 }
 
 describe("synchronizeCompletedIssues", () => {
+  it("queries actor database IDs through User and Bot inline fragments", async () => {
+    const client = {
+      async graphql(query: string) {
+        expect(query).toContain("... on User { databaseId }");
+        expect(query).toContain("... on Bot { databaseId }");
+        return {
+          rateLimit: { remaining: 4999, resetAt: null },
+          repository: {
+            issues: {
+              nodes: [
+                {
+                  author: { databaseId: 1 },
+                  closedAt: "2026-07-01T00:00:00Z",
+                  closedByPullRequestsReferences: { nodes: [{ author: { databaseId: 2 } }] },
+                  id: "I_node_1",
+                  number: 10,
+                  title: "完了したIssue",
+                },
+              ],
+              pageInfo: { endCursor: null, hasNextPage: false },
+            },
+          },
+        };
+      },
+    };
+
+    const api = createGitHubCompletedIssueApi(client as never);
+    const page = await api.listClosedIssuesPage({
+      owner: "mytysoldier",
+      repository: "private-project",
+    });
+
+    expect(page.issues[0]).toMatchObject({
+      authorGithubUserId: 1,
+      closingPullRequestAuthorGithubUserIds: [2],
+    });
+  });
+
   it("saves issues matched by each OR condition exactly once", async () => {
     const pages = [
       [
