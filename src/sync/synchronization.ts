@@ -113,7 +113,9 @@ export async function synchronize(
             synchronizedAt: startedAt,
             targets,
           });
-          await stores.markRepositorySynchronized(repository.githubRepositoryId, startedAt);
+          if (request.mode !== "range") {
+            await stores.markRepositorySynchronized(repository.githubRepositoryId, startedAt);
+          }
           return synchronized;
         });
         aggregate.fetchedCount += result.fetchedCount;

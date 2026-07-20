@@ -274,6 +274,27 @@ describe("synchronize", () => {
     expect(synchronizedRepositories).toEqual([101, 102]);
   });
 
+  it("does not advance a repository cursor for a range sync", async () => {
+    const stores = createStores();
+    const synchronizedRepositories: number[] = [];
+    stores.markRepositorySynchronized = async (repositoryId) => {
+      synchronizedRepositories.push(repositoryId);
+    };
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+
+    await synchronize(
+      {
+        from: new Date("2026-07-01T00:00:00.000Z"),
+        mode: "range",
+        to: new Date("2026-07-10T00:00:00.000Z"),
+        triggerType: "manual",
+      },
+      dependencies,
+    );
+
+    expect(synchronizedRepositories).toEqual([]);
+  });
+
   it("accepts range and full modes, while rejecting invalid mode-specific dates", async () => {
     const stores = createStores();
     const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
