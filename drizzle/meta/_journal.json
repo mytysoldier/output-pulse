@@ -8,6 +8,13 @@
       "when": 1784354712052,
       "tag": "0000_absent_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784461939183,
+      "tag": "0001_create_dashboard_views",
+      "breakpoints": true
     }
   ]
 }
