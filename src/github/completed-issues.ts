@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 
 import type { CompletedIssueStore, PersistedCompletedIssue } from "../db/completed-issue-store.js";
+import type { UpsertResult } from "../db/upsert-result.js";
 import type { TrackedActor } from "../db/target-store.js";
 import type { GitHubRateLimit, TargetRepository } from "./targets.js";
 import { GitHubApiError } from "./targets.js";
@@ -76,8 +77,10 @@ export interface GitHubCompletedIssueApi {
 
 export interface CompletedIssueSynchronizationResult {
   fetchedCount: number;
+  insertedCount: number;
   rateLimit: GitHubRateLimit;
   savedCount: number;
+  updatedCount: number;
 }
 
 interface ClosedIssuesQueryResponse {
@@ -162,7 +165,9 @@ export async function synchronizeCompletedIssues({
 }): Promise<CompletedIssueSynchronizationResult> {
   const result = await listClosedIssues(api, repository);
   const trackedActorIds = new Set(trackedActors.map((actor) => actor.githubUserId));
-  const synchronizedIssues = result.issues.flatMap((issue) => {
+  const synchronizedIssues: PersistedCompletedIssue[] = [];
+  const refreshedIssues: PersistedCompletedIssue[] = [];
+  for (const issue of result.issues) {
     const matchedByAuthor =
       issue.authorGithubUserId !== null && trackedActorIds.has(issue.authorGithubUserId);
     const matchedByClosingPr = issue.closedEvents.some(
@@ -179,32 +184,47 @@ export async function synchronizeCompletedIssues({
             trackedActorIds.has(event.closingPullRequestAuthorGithubUserId)),
       );
 
-    if (
-      firstQualifyingEvent === undefined ||
-      !isWithinRange(firstQualifyingEvent.closedAt, since, until)
-    ) {
-      return [];
+    if (firstQualifyingEvent === undefined) {
+      continue;
     }
 
-    return [
-      toPersistedCompletedIssue({
-        issue,
-        matchedByAuthor,
-        matchedByClosingPr,
-        firstClosedAt: firstQualifyingEvent.closedAt,
-        repository,
-        synchronizedAt,
-      }),
-    ];
-  });
+    const persistedIssue = toPersistedCompletedIssue({
+      issue,
+      matchedByAuthor,
+      matchedByClosingPr,
+      firstClosedAt: firstQualifyingEvent.closedAt,
+      repository,
+      synchronizedAt,
+    });
+    if (isWithinRange(firstQualifyingEvent.closedAt, since, until)) {
+      synchronizedIssues.push(persistedIssue);
+    } else {
+      refreshedIssues.push(persistedIssue);
+    }
+  }
 
-  await store.upsertCompletedIssues(synchronizedIssues);
+  const persistence = toUpsertResult(
+    await store.upsertCompletedIssues(synchronizedIssues),
+    synchronizedIssues.length,
+  );
+  const refresh = toUpsertResult(
+    store.refreshCompletedIssues === undefined
+      ? undefined
+      : await store.refreshCompletedIssues(refreshedIssues),
+    0,
+  );
 
   return {
     fetchedCount: result.issues.length,
+    insertedCount: persistence.insertedCount,
     rateLimit: result.rateLimit,
-    savedCount: synchronizedIssues.length,
+    savedCount: persistence.insertedCount + persistence.updatedCount + refresh.updatedCount,
+    updatedCount: persistence.updatedCount + refresh.updatedCount,
   };
+}
+
+function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number): UpsertResult {
+  return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
 }
 
 function isWithinRange(date: Date, since?: Date, until?: Date): boolean {

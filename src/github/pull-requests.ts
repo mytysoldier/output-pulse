@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 
 import type { PersistedPullRequest, PullRequestStore } from "../db/pull-request-store.js";
+import type { UpsertResult } from "../db/upsert-result.js";
 import type { TrackedActor } from "../db/target-store.js";
 import type { GitHubRateLimit, TargetRepository } from "./targets.js";
 import { GitHubApiError } from "./targets.js";
@@ -37,8 +38,10 @@ export interface GitHubPullRequestApi {
 
 export interface PullRequestSynchronizationResult {
   fetchedCount: number;
+  insertedCount: number;
   rateLimit: GitHubRateLimit;
   savedCount: number;
+  updatedCount: number;
 }
 
 /**
@@ -107,13 +110,22 @@ export async function synchronizePullRequests({
     )
     .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
 
-  await store.upsertPullRequests(synchronizedPullRequests);
+  const persistence = toUpsertResult(
+    await store.upsertPullRequests(synchronizedPullRequests),
+    synchronizedPullRequests.length,
+  );
 
   return {
     fetchedCount: result.pullRequests.length,
+    insertedCount: persistence.insertedCount,
     rateLimit: result.rateLimit,
     savedCount: synchronizedPullRequests.length,
+    updatedCount: persistence.updatedCount,
   };
+}
+
+function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number): UpsertResult {
+  return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
 }
 
 /** 作成またはマージのどちらかが対象期間内のPRだけを同期対象にする。 */

@@ -161,7 +161,13 @@ describe("synchronizeRepositoryCommits", () => {
       firstSeenAt: synchronizedAt,
       lastSeenAt: synchronizedAt,
     });
-    expect(result).toEqual({ fetchedCount: 4, persistedCount: 2, rateLimit: { remaining: 4990 } });
+    expect(result).toEqual({
+      fetchedCount: 4,
+      insertedCount: 2,
+      persistedCount: 2,
+      rateLimit: { remaining: 4990 },
+      updatedCount: 0,
+    });
   });
 
   it("paginates and does not add duplicates when the same period is synchronized again", async () => {

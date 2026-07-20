@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 
 import type { PersistedCommit, CommitStore } from "../db/commit-store.js";
+import type { UpsertResult } from "../db/upsert-result.js";
 import type { TrackedActor } from "../db/target-store.js";
 import { GitHubApiError, type GitHubRateLimit, type TargetRepository } from "./targets.js";
 
@@ -34,8 +35,10 @@ export interface GitHubCommitApi {
 
 export interface CommitSynchronizationResult {
   fetchedCount: number;
+  insertedCount: number;
   persistedCount: number;
   rateLimit: GitHubRateLimit;
+  updatedCount: number;
 }
 
 /**
@@ -167,13 +170,19 @@ export async function synchronizeRepositoryCommits({
 
   const commits = [...commitsBySha.values()];
 
-  await store.upsertCommits(commits);
+  const persistence = toUpsertResult(await store.upsertCommits(commits), commits.length);
 
   return {
     fetchedCount,
+    insertedCount: persistence.insertedCount,
     persistedCount: commits.length,
     rateLimit,
+    updatedCount: persistence.updatedCount,
   };
+}
+
+function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number): UpsertResult {
+  return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
 }
 
 function isWithinRange(date: Date, since?: Date, until?: Date): boolean {

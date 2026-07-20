@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { commits } from "./schema/index.js";
+import type { UpsertResult } from "./upsert-result.js";
 
 export interface PersistedCommit {
   repositoryId: number;
@@ -16,7 +17,7 @@ export interface CommitStore {
   /**
    * コミットをrepository IDとSHAでUpsertし、再同期時は最終確認日時と可変情報を更新する。
    */
-  upsertCommits(commits: PersistedCommit[]): Promise<void>;
+  upsertCommits(commits: PersistedCommit[]): Promise<UpsertResult | undefined>;
 }
 
 /**
@@ -29,10 +30,10 @@ export function createCommitStore(database: NodePgDatabase): CommitStore {
      */
     async upsertCommits(persistedCommits) {
       if (persistedCommits.length === 0) {
-        return;
+        return { insertedCount: 0, updatedCount: 0 };
       }
 
-      await database
+      const results = await database
         .insert(commits)
         .values(persistedCommits)
         .onConflictDoUpdate({
@@ -42,7 +43,15 @@ export function createCommitStore(database: NodePgDatabase): CommitStore {
             committedAt: sql`excluded.${sql.identifier(commits.committedAt.name)}`,
             lastSeenAt: sql`excluded.${sql.identifier(commits.lastSeenAt.name)}`,
           },
-        });
+        })
+        .returning({ inserted: sql<boolean>`xmax = 0` });
+
+      return countUpserts(results);
     },
   };
+}
+
+function countUpserts(results: Array<{ inserted: boolean }>): UpsertResult {
+  const insertedCount = results.filter((result) => result.inserted).length;
+  return { insertedCount, updatedCount: results.length - insertedCount };
 }

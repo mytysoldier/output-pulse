@@ -80,7 +80,13 @@ describe("synchronizePullRequests", () => {
     });
 
     expect(requestedPages).toEqual([1, 2]);
-    expect(result).toEqual({ fetchedCount: 102, rateLimit: { remaining: 4980 }, savedCount: 101 });
+    expect(result).toEqual({
+      fetchedCount: 102,
+      insertedCount: 101,
+      rateLimit: { remaining: 4980 },
+      savedCount: 101,
+      updatedCount: 0,
+    });
     expect(store.pullRequests.size).toBe(101);
     expect(store.pullRequests.get("PR_node_other")).toBeUndefined();
     expect(store.pullRequests.get("PR_node_1")).toEqual({

@@ -112,6 +112,7 @@ export async function synchronize(
         );
         aggregate.fetchedCount += result.fetchedCount;
         aggregate.insertedCount += result.insertedCount;
+        aggregate.updatedCount += result.updatedCount;
         aggregate.rateLimitRemaining = lowestRateLimit(
           aggregate.rateLimitRemaining,
           result.rateLimitRemaining,
@@ -128,7 +129,7 @@ export async function synchronize(
       period,
       status,
       syncRunId,
-      updatedCount: 0,
+      updatedCount: aggregate.updatedCount,
     };
     await dependencies.syncRunStore.finishSyncRun(
       syncRunId,
@@ -190,7 +191,12 @@ async function synchronizeRepository({
   stores: RepositorySynchronizationStores;
   synchronizedAt: Date;
   targets: SynchronizationTargets;
-}): Promise<{ fetchedCount: number; insertedCount: number; rateLimitRemaining?: number }> {
+}): Promise<{
+  fetchedCount: number;
+  insertedCount: number;
+  rateLimitRemaining?: number;
+  updatedCount: number;
+}> {
   const commits = await synchronizeRepositoryCommits({
     api: commitApi,
     repository,
@@ -221,11 +227,13 @@ async function synchronizeRepository({
 
   return {
     fetchedCount: commits.fetchedCount + pullRequests.fetchedCount + completedIssues.fetchedCount,
-    insertedCount: commits.persistedCount + pullRequests.savedCount + completedIssues.savedCount,
+    insertedCount:
+      commits.insertedCount + pullRequests.insertedCount + completedIssues.insertedCount,
     rateLimitRemaining: lowestRateLimit(
       lowestRateLimit(commits.rateLimit.remaining, pullRequests.rateLimit.remaining),
       completedIssues.rateLimit.remaining,
     ),
+    updatedCount: commits.updatedCount + pullRequests.updatedCount + completedIssues.updatedCount,
   };
 }
 
@@ -237,6 +245,7 @@ function createAggregate(rateLimit: GitHubRateLimit, repositoryTotal: number) {
     repositoryFailed: 0,
     repositorySucceeded: 0,
     repositoryTotal,
+    updatedCount: 0,
   };
 }
 
