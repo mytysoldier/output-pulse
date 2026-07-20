@@ -13,16 +13,19 @@ export interface PersistedCommit {
 }
 
 export interface CommitStore {
+  /**
+   * コミットをrepository IDとSHAでUpsertし、再同期時は最終確認日時と可変情報を更新する。
+   */
   upsertCommits(commits: PersistedCommit[]): Promise<void>;
 }
 
 /**
- * Creates a store that persists synchronized commits while retaining their first-seen timestamp.
+ * 同期したコミットをDBへ保存するCommitStoreを作成する。既存コミットの初回確認日時は保持する。
  */
 export function createCommitStore(database: NodePgDatabase): CommitStore {
   return {
     /**
-     * Inserts commits or refreshes their mutable fields when the repository ID and SHA already exist.
+     * 新規コミットを挿入し、同じrepository IDとSHAがある場合はauthor・コミット時刻・最終確認日時を更新する。
      */
     async upsertCommits(persistedCommits) {
       if (persistedCommits.length === 0) {

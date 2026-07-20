@@ -18,6 +18,9 @@ export interface GitHubCommitPage {
 }
 
 export interface GitHubCommitApi {
+  /**
+   * 指定したデフォルトブランチから、期間で絞り込んだコミットの1ページを取得する。
+   */
   listDefaultBranchCommitsPage(input: {
     owner: string;
     repository: string;
@@ -36,10 +39,14 @@ export interface CommitSynchronizationResult {
 }
 
 /**
- * Creates a GitHub API adapter that lists commits from a repository's default branch.
+ * GitHub REST APIを呼び出し、デフォルトブランチのコミットをアプリ用の形式へ変換するAPIアダプターを作成する。
  */
 export function createGitHubCommitApi(client: Octokit): GitHubCommitApi {
   return {
+    /**
+     * 指定したページのコミットを取得し、コミッター時刻・GitHub author ID・SHAだけを返す。
+     * 空リポジトリを示す409応答は、同期可能な0件のページとして扱う。
+     */
     async listDefaultBranchCommitsPage({
       owner,
       repository,
@@ -90,7 +97,7 @@ export function createGitHubCommitApi(client: Octokit): GitHubCommitApi {
 }
 
 /**
- * Synchronizes commits authored by tracked actors and persists them by repository ID and SHA.
+ * 対象リポジトリの全ページを取得し、tracked actorがauthorのコミットだけをSHAで重複除去して保存する。
  */
 export async function synchronizeRepositoryCommits({
   api,
@@ -169,7 +176,7 @@ export async function synchronizeRepositoryCommits({
 }
 
 /**
- * Extracts the remaining request count and reset time from GitHub rate-limit headers.
+ * GitHubのレスポンスヘッダーから、残りリクエスト数と制限解除時刻を取り出す。
  */
 function getRateLimit(headers: Record<string, string | number | undefined>): GitHubRateLimit {
   const remaining = parseHeaderNumber(headers["x-ratelimit-remaining"]);
@@ -182,7 +189,7 @@ function getRateLimit(headers: Record<string, string | number | undefined>): Git
 }
 
 /**
- * Parses a finite numeric GitHub response header value.
+ * GitHubレスポンスヘッダーの文字列または数値を、安全な有限数に変換する。
  */
 function parseHeaderNumber(value: number | string | undefined): number | undefined {
   if (typeof value === "number") {
@@ -198,7 +205,7 @@ function parseHeaderNumber(value: number | string | undefined): number | undefin
 }
 
 /**
- * Converts an unknown GitHub client error into a sanitized application error.
+ * GitHubクライアントからの任意の例外を、詳細情報を漏らさないGitHubApiErrorへ変換する。
  */
 function toGitHubApiError(error: unknown): GitHubApiError {
   if (error instanceof GitHubApiError) {
@@ -216,7 +223,7 @@ function toGitHubApiError(error: unknown): GitHubApiError {
 }
 
 /**
- * Returns whether GitHub reported that the repository has no commits yet.
+ * GitHubが空リポジトリ（コミット未作成）を示す409応答を返したか判定する。
  */
 function isEmptyRepositoryError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "status" in error && error.status === 409;
