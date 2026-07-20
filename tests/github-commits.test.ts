@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { CommitStore } from "../src/db/commit-store.js";
+import type { CommitStore, PersistedCommit } from "../src/db/commit-store.js";
 import type { TargetRepository } from "../src/github/targets.js";
 import {
   type GitHubCommit,
   type GitHubCommitApi,
+  createGitHubCommitApi,
   synchronizeRepositoryCommits,
 } from "../src/github/commits.js";
 
@@ -32,10 +33,15 @@ function createCommit(sha: string, authorGithubUserId: number | undefined): GitH
   };
 }
 
-function createStore(): CommitStore & { commits: Map<string, object> } {
+function createStore(): CommitStore & {
+  commits: Map<string, object>;
+  upsertBatches: PersistedCommit[][];
+} {
   return {
     commits: new Map(),
+    upsertBatches: [],
     async upsertCommits(commits) {
+      this.upsertBatches.push(commits);
       for (const commit of commits) {
         const key = `${commit.repositoryId}:${commit.sha}`;
         const existing = this.commits.get(key);
@@ -52,6 +58,43 @@ function createStore(): CommitStore & { commits: Map<string, object> } {
 }
 
 describe("synchronizeRepositoryCommits", () => {
+  it("uses the committer timestamp when mapping GitHub commits", async () => {
+    const client = {
+      rest: {
+        repos: {
+          async listCommits() {
+            return {
+              headers: {},
+              data: [
+                {
+                  sha: "rebased-commit",
+                  author: { id: 1 },
+                  commit: {
+                    author: { date: "2026-07-18T15:00:00.000Z" },
+                    committer: { date: "2026-07-19T01:00:00.000Z" },
+                  },
+                },
+              ],
+            };
+          },
+        },
+      },
+    };
+    const api = createGitHubCommitApi(client as never);
+
+    const result = await api.listDefaultBranchCommitsPage({
+      owner: "mytysoldier",
+      repository: "private-project",
+      defaultBranch: "main",
+      page: 1,
+      perPage: 100,
+    });
+
+    expect(result.commits).toEqual([
+      expect.objectContaining({ committedAt: new Date("2026-07-19T01:00:00.000Z") }),
+    ]);
+  });
+
   it("stores only tracked authors from the default branch, including merge commits", async () => {
     const requests: Parameters<GitHubCommitApi["listDefaultBranchCommitsPage"]>[0][] = [];
     const api: GitHubCommitApi = {
@@ -126,5 +169,26 @@ describe("synchronizeRepositoryCommits", () => {
 
     expect(store.commits).toHaveLength(101);
     expect(result).toMatchObject({ fetchedCount: 101, persistedCount: 101 });
+  });
+
+  it("deduplicates commits returned on adjacent pages before upserting", async () => {
+    const api: GitHubCommitApi = {
+      async listDefaultBranchCommitsPage({ page }) {
+        return {
+          rateLimit: { remaining: 4980 },
+          commits:
+            page === 1
+              ? Array.from({ length: 100 }, (_, index) => createCommit(`commit-${index}`, 1))
+              : [createCommit("commit-99", 1)],
+        };
+      },
+    };
+    const store = createStore();
+
+    const result = await synchronizeRepositoryCommits({ api, store, repository, trackedActors });
+
+    expect(result).toMatchObject({ fetchedCount: 101, persistedCount: 100 });
+    expect(store.upsertBatches).toHaveLength(1);
+    expect(store.upsertBatches[0]).toHaveLength(100);
   });
 });

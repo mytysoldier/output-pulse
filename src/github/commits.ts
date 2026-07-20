@@ -61,7 +61,7 @@ export function createGitHubCommitApi(client: Octokit): GitHubCommitApi {
           rateLimit: getRateLimit(response.headers),
           commits: response.data
             .map((commit) => {
-              const committedAt = commit.commit.author?.date;
+              const committedAt = commit.commit.committer?.date;
 
               if (committedAt === null || committedAt === undefined) {
                 return undefined;
@@ -100,7 +100,7 @@ export async function synchronizeRepositoryCommits({
   synchronizedAt?: Date;
 }): Promise<CommitSynchronizationResult> {
   const trackedActorIds = new Set(trackedActors.map((actor) => actor.githubUserId));
-  const commits: PersistedCommit[] = [];
+  const commitsBySha = new Map<string, PersistedCommit>();
   let page = 1;
   let fetchedCount = 0;
   let rateLimit: GitHubRateLimit = {};
@@ -124,22 +124,21 @@ export async function synchronizeRepositoryCommits({
 
     rateLimit = response.rateLimit;
     fetchedCount += response.commits.length;
-    commits.push(
-      ...response.commits
-        .filter(
-          (commit): commit is GitHubCommit & { authorGithubUserId: number } =>
-            commit.authorGithubUserId !== undefined &&
-            trackedActorIds.has(commit.authorGithubUserId),
-        )
-        .map((commit) => ({
+    for (const commit of response.commits) {
+      if (
+        commit.authorGithubUserId !== undefined &&
+        trackedActorIds.has(commit.authorGithubUserId)
+      ) {
+        commitsBySha.set(commit.sha, {
           repositoryId: repository.githubRepositoryId,
           sha: commit.sha,
           authorGithubUserId: commit.authorGithubUserId,
           committedAt: commit.committedAt,
           firstSeenAt: synchronizedAt,
           lastSeenAt: synchronizedAt,
-        })),
-    );
+        });
+      }
+    }
 
     if (response.commits.length < COMMITS_PER_PAGE) {
       break;
@@ -147,6 +146,8 @@ export async function synchronizeRepositoryCommits({
 
     page += 1;
   }
+
+  const commits = [...commitsBySha.values()];
 
   await store.upsertCommits(commits);
 
