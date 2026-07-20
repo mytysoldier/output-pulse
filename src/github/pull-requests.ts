@@ -128,11 +128,14 @@ function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number
   return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
 }
 
-/** 作成またはマージのどちらかが対象期間内のPRだけを同期対象にする。 */
+/**
+ * 対象期間外の指標を公開しないため、期間指定時は作成・マージの両日時が範囲内のPRだけを保存する。
+ * 未マージPRは作成日時だけで判定する。
+ */
 function isWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Date): boolean {
   return (
-    isWithinRange(pullRequest.createdAt, since, until) ||
-    (pullRequest.mergedAt !== null && isWithinRange(pullRequest.mergedAt, since, until))
+    isWithinRange(pullRequest.createdAt, since, until) &&
+    (pullRequest.mergedAt === null || isWithinRange(pullRequest.mergedAt, since, until))
   );
 }
 

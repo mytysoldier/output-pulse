@@ -150,7 +150,7 @@ describe("synchronizePullRequests", () => {
     });
   });
 
-  it("saves only pull requests created or merged within a requested period", async () => {
+  it("saves only pull requests whose stored metrics are within a requested period", async () => {
     const api: GitHubPullRequestApi = {
       async listPullRequestsPage() {
         return {
@@ -158,9 +158,22 @@ describe("synchronizePullRequests", () => {
             trackedOpenPullRequest,
             {
               ...trackedOpenPullRequest,
-              createdAt: new Date("2026-06-01T00:00:00Z"),
-              githubNodeId: "PR_node_merged_in_range",
+              createdAt: new Date("2026-07-03T00:00:00Z"),
+              githubNodeId: "PR_node_in_range",
               mergedAt: new Date("2026-07-03T00:00:00Z"),
+              state: "closed",
+            },
+            {
+              ...trackedOpenPullRequest,
+              createdAt: new Date("2026-06-01T00:00:00Z"),
+              githubNodeId: "PR_node_created_before_range",
+              mergedAt: new Date("2026-07-03T00:00:00Z"),
+              state: "closed",
+            },
+            {
+              ...trackedOpenPullRequest,
+              githubNodeId: "PR_node_merged_after_range",
+              mergedAt: new Date("2026-07-05T00:00:00Z"),
               state: "closed",
             },
           ],
@@ -179,8 +192,8 @@ describe("synchronizePullRequests", () => {
       until: new Date("2026-07-04T00:00:00Z"),
     });
 
-    expect(result).toMatchObject({ fetchedCount: 2, savedCount: 1 });
-    expect([...store.pullRequests.keys()]).toEqual(["PR_node_merged_in_range"]);
+    expect(result).toMatchObject({ fetchedCount: 4, savedCount: 1 });
+    expect([...store.pullRequests.keys()]).toEqual(["PR_node_in_range"]);
   });
 
   it("returns a sanitized typed error when GitHub rejects a request", async () => {
