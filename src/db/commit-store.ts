@@ -16,8 +16,14 @@ export interface CommitStore {
   upsertCommits(commits: PersistedCommit[]): Promise<void>;
 }
 
+/**
+ * Creates a store that persists synchronized commits while retaining their first-seen timestamp.
+ */
 export function createCommitStore(database: NodePgDatabase): CommitStore {
   return {
+    /**
+     * Inserts commits or refreshes their mutable fields when the repository ID and SHA already exist.
+     */
     async upsertCommits(persistedCommits) {
       if (persistedCommits.length === 0) {
         return;

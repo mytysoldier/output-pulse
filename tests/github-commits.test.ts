@@ -95,6 +95,29 @@ describe("synchronizeRepositoryCommits", () => {
     ]);
   });
 
+  it("treats an empty repository as an empty commit page", async () => {
+    const client = {
+      rest: {
+        repos: {
+          async listCommits() {
+            throw { status: 409 };
+          },
+        },
+      },
+    };
+    const api = createGitHubCommitApi(client as never);
+
+    const result = await api.listDefaultBranchCommitsPage({
+      owner: "mytysoldier",
+      repository: "empty-project",
+      defaultBranch: "main",
+      page: 1,
+      perPage: 100,
+    });
+
+    expect(result).toEqual({ rateLimit: {}, commits: [] });
+  });
+
   it("stores only tracked authors from the default branch, including merge commits", async () => {
     const requests: Parameters<GitHubCommitApi["listDefaultBranchCommitsPage"]>[0][] = [];
     const api: GitHubCommitApi = {

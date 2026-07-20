@@ -35,6 +35,9 @@ export interface CommitSynchronizationResult {
   rateLimit: GitHubRateLimit;
 }
 
+/**
+ * Creates a GitHub API adapter that lists commits from a repository's default branch.
+ */
 export function createGitHubCommitApi(client: Octokit): GitHubCommitApi {
   return {
     async listDefaultBranchCommitsPage({
@@ -76,12 +79,19 @@ export function createGitHubCommitApi(client: Octokit): GitHubCommitApi {
             .filter((commit): commit is GitHubCommit => commit !== undefined),
         };
       } catch (error) {
+        if (isEmptyRepositoryError(error)) {
+          return { rateLimit: {}, commits: [] };
+        }
+
         throw toGitHubApiError(error);
       }
     },
   };
 }
 
+/**
+ * Synchronizes commits authored by tracked actors and persists them by repository ID and SHA.
+ */
 export async function synchronizeRepositoryCommits({
   api,
   store,
@@ -158,6 +168,9 @@ export async function synchronizeRepositoryCommits({
   };
 }
 
+/**
+ * Extracts the remaining request count and reset time from GitHub rate-limit headers.
+ */
 function getRateLimit(headers: Record<string, string | number | undefined>): GitHubRateLimit {
   const remaining = parseHeaderNumber(headers["x-ratelimit-remaining"]);
   const reset = parseHeaderNumber(headers["x-ratelimit-reset"]);
@@ -168,6 +181,9 @@ function getRateLimit(headers: Record<string, string | number | undefined>): Git
   };
 }
 
+/**
+ * Parses a finite numeric GitHub response header value.
+ */
 function parseHeaderNumber(value: number | string | undefined): number | undefined {
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : undefined;
@@ -181,6 +197,9 @@ function parseHeaderNumber(value: number | string | undefined): number | undefin
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+/**
+ * Converts an unknown GitHub client error into a sanitized application error.
+ */
 function toGitHubApiError(error: unknown): GitHubApiError {
   if (error instanceof GitHubApiError) {
     return error;
@@ -194,4 +213,11 @@ function toGitHubApiError(error: unknown): GitHubApiError {
   }
 
   return new GitHubApiError();
+}
+
+/**
+ * Returns whether GitHub reported that the repository has no commits yet.
+ */
+function isEmptyRepositoryError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "status" in error && error.status === 409;
 }
