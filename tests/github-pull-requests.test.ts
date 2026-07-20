@@ -81,7 +81,7 @@ describe("synchronizePullRequests", () => {
 
     expect(requestedPages).toEqual([1, 2]);
     expect(result).toEqual({ fetchedCount: 102, rateLimit: { remaining: 4980 }, savedCount: 101 });
-    expect(store.pullRequests).toHaveLength(101);
+    expect(store.pullRequests.size).toBe(101);
     expect(store.pullRequests.get("PR_node_other")).toBeUndefined();
     expect(store.pullRequests.get("PR_node_1")).toEqual({
       authorGithubUserId: 1,
@@ -135,7 +135,7 @@ describe("synchronizePullRequests", () => {
       trackedActors,
     });
 
-    expect(store.pullRequests).toHaveLength(1);
+    expect(store.pullRequests.size).toBe(1);
     expect(store.pullRequests.get("PR_node_1")).toMatchObject({
       firstSeenAt: new Date("2026-07-02T00:00:00Z"),
       lastSeenAt: new Date("2026-07-04T00:00:00Z"),
