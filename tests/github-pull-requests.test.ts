@@ -144,6 +144,39 @@ describe("synchronizePullRequests", () => {
     });
   });
 
+  it("saves only pull requests created or merged within a requested period", async () => {
+    const api: GitHubPullRequestApi = {
+      async listPullRequestsPage() {
+        return {
+          pullRequests: [
+            trackedOpenPullRequest,
+            {
+              ...trackedOpenPullRequest,
+              createdAt: new Date("2026-06-01T00:00:00Z"),
+              githubNodeId: "PR_node_merged_in_range",
+              mergedAt: new Date("2026-07-03T00:00:00Z"),
+              state: "closed",
+            },
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+    const store = createStore();
+
+    const result = await synchronizePullRequests({
+      api,
+      repository,
+      since: new Date("2026-07-02T00:00:00Z"),
+      store,
+      trackedActors,
+      until: new Date("2026-07-04T00:00:00Z"),
+    });
+
+    expect(result).toMatchObject({ fetchedCount: 2, savedCount: 1 });
+    expect([...store.pullRequests.keys()]).toEqual(["PR_node_merged_in_range"]);
+  });
+
   it("returns a sanitized typed error when GitHub rejects a request", async () => {
     const api: GitHubPullRequestApi = {
       async listPullRequestsPage() {

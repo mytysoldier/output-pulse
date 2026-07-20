@@ -144,7 +144,8 @@ export async function synchronizeRepositoryCommits({
     for (const commit of response.commits) {
       if (
         commit.authorGithubUserId !== undefined &&
-        trackedActorIds.has(commit.authorGithubUserId)
+        trackedActorIds.has(commit.authorGithubUserId) &&
+        isWithinRange(commit.committedAt, since, until)
       ) {
         commitsBySha.set(commit.sha, {
           repositoryId: repository.githubRepositoryId,
@@ -173,6 +174,10 @@ export async function synchronizeRepositoryCommits({
     persistedCount: commits.length,
     rateLimit,
   };
+}
+
+function isWithinRange(date: Date, since?: Date, until?: Date): boolean {
+  return (since === undefined || date >= since) && (until === undefined || date <= until);
 }
 
 /**

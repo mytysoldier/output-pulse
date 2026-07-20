@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
 import { syncRuns } from "./schema/index.js";
@@ -29,7 +29,7 @@ export interface FinishSyncRunInput {
 }
 
 export interface SyncRunStore {
-  findLastSuccessfulFinishedAt(): Promise<Date | undefined>;
+  findLastIncrementalOrFullSuccessFinishedAt(): Promise<Date | undefined>;
   finishSyncRun(id: number, input: FinishSyncRunInput): Promise<void>;
   startSyncRun(input: StartSyncRunInput): Promise<number>;
 }
@@ -37,11 +37,17 @@ export interface SyncRunStore {
 /** 同期の開始・結果だけを記録し、リポジトリ名やAPIエラー詳細は保存しないStoreを作成する。 */
 export function createSyncRunStore(database: NodePgDatabase): SyncRunStore {
   return {
-    async findLastSuccessfulFinishedAt() {
+    async findLastIncrementalOrFullSuccessFinishedAt() {
       const [lastSuccess] = await database
         .select({ finishedAt: syncRuns.finishedAt })
         .from(syncRuns)
-        .where(and(eq(syncRuns.status, "success"), isNotNull(syncRuns.finishedAt)))
+        .where(
+          and(
+            eq(syncRuns.status, "success"),
+            inArray(syncRuns.syncMode, ["incremental", "full"]),
+            isNotNull(syncRuns.finishedAt),
+          ),
+        )
         .orderBy(desc(syncRuns.finishedAt))
         .limit(1);
 

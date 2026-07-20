@@ -240,6 +240,38 @@ describe("synchronizeCompletedIssues", () => {
     });
   });
 
+  it("saves only completed issues whose qualifying close is within a requested period", async () => {
+    const api: GitHubCompletedIssueApi = {
+      async listClosedIssuesPage() {
+        return {
+          endCursor: null,
+          hasNextPage: false,
+          issues: [
+            completedIssue({ githubNodeId: "I_before_period" }),
+            completedIssue({
+              closedEvents: [closedEvent({ closedAt: new Date("2026-07-03T00:00:00Z") })],
+              githubNodeId: "I_in_period",
+            }),
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+    const store = createStore();
+
+    const result = await synchronizeCompletedIssues({
+      api,
+      repository,
+      since: new Date("2026-07-02T00:00:00Z"),
+      store,
+      trackedActors: [{ actorType: "user", githubLogin: "mytysoldier", githubUserId: 3 }],
+      until: new Date("2026-07-04T00:00:00Z"),
+    });
+
+    expect(result).toMatchObject({ fetchedCount: 2, savedCount: 1 });
+    expect([...store.issues.keys()]).toEqual(["I_in_period"]);
+  });
+
   it("preserves the first close time while updating a title after an issue is reopened", async () => {
     const store = createStore();
     const firstApi: GitHubCompletedIssueApi = {

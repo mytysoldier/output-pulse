@@ -82,15 +82,19 @@ export function createGitHubPullRequestApi(client: Octokit): GitHubPullRequestAp
 export async function synchronizePullRequests({
   api,
   repository,
+  since,
   store,
   synchronizedAt = new Date(),
   trackedActors,
+  until,
 }: {
   api: GitHubPullRequestApi;
   repository: TargetRepository;
+  since?: Date;
   store: PullRequestStore;
   synchronizedAt?: Date;
   trackedActors: TrackedActor[];
+  until?: Date;
 }): Promise<PullRequestSynchronizationResult> {
   const result = await listPullRequests(api, repository);
   const trackedActorIds = new Set(trackedActors.map((actor) => actor.githubUserId));
@@ -98,7 +102,8 @@ export async function synchronizePullRequests({
     .filter(
       (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
         pullRequest.authorGithubUserId !== null &&
-        trackedActorIds.has(pullRequest.authorGithubUserId),
+        trackedActorIds.has(pullRequest.authorGithubUserId) &&
+        isWithinPeriod(pullRequest, since, until),
     )
     .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
 
@@ -109,6 +114,18 @@ export async function synchronizePullRequests({
     rateLimit: result.rateLimit,
     savedCount: synchronizedPullRequests.length,
   };
+}
+
+/** 作成またはマージのどちらかが対象期間内のPRだけを同期対象にする。 */
+function isWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Date): boolean {
+  return (
+    isWithinRange(pullRequest.createdAt, since, until) ||
+    (pullRequest.mergedAt !== null && isWithinRange(pullRequest.mergedAt, since, until))
+  );
+}
+
+function isWithinRange(date: Date, since?: Date, until?: Date): boolean {
+  return (since === undefined || date >= since) && (until === undefined || date <= until);
 }
 
 /**

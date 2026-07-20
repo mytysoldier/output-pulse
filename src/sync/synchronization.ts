@@ -203,16 +203,20 @@ async function synchronizeRepository({
   const pullRequests = await synchronizePullRequests({
     api: pullRequestApi,
     repository,
+    since: period.from,
     store: stores.pullRequestStore,
     synchronizedAt,
     trackedActors: targets.trackedActors,
+    until: period.to,
   });
   const completedIssues = await synchronizeCompletedIssues({
     api: completedIssueApi,
     repository,
+    since: period.from,
     store: stores.completedIssueStore,
     synchronizedAt,
     trackedActors: targets.trackedActors,
+    until: period.to,
   });
 
   return {
@@ -260,7 +264,7 @@ async function resolvePeriod(
     return {};
   }
 
-  const lastSuccessfulFinishedAt = await syncRunStore.findLastSuccessfulFinishedAt();
+  const lastSuccessfulFinishedAt = await syncRunStore.findLastIncrementalOrFullSuccessFinishedAt();
   return {
     from:
       lastSuccessfulFinishedAt === undefined

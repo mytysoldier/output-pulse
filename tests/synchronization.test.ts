@@ -48,7 +48,7 @@ function createSyncRunStore(lastSuccess?: Date): SyncRunStore & {
   return {
     finishes: [],
     starts: [],
-    async findLastSuccessfulFinishedAt() {
+    async findLastIncrementalOrFullSuccessFinishedAt() {
       return lastSuccess;
     },
     async finishSyncRun(id, input) {
@@ -243,7 +243,7 @@ describe("synchronize", () => {
 
     await expect(
       synchronize({ from, mode: "range", to, triggerType: "manual" }, dependencies),
-    ).resolves.toMatchObject({ period: { from, to } });
+    ).resolves.toMatchObject({ insertedCount: 0, period: { from, to } });
     await expect(
       synchronize({ mode: "full", triggerType: "manual" }, dependencies),
     ).resolves.toMatchObject({ period: {} });

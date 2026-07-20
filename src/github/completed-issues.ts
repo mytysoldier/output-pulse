@@ -146,15 +146,19 @@ export function createGitHubCompletedIssueApi(client: Octokit): GitHubCompletedI
 export async function synchronizeCompletedIssues({
   api,
   repository,
+  since,
   store,
   synchronizedAt = new Date(),
   trackedActors,
+  until,
 }: {
   api: GitHubCompletedIssueApi;
   repository: TargetRepository;
+  since?: Date;
   store: CompletedIssueStore;
   synchronizedAt?: Date;
   trackedActors: TrackedActor[];
+  until?: Date;
 }): Promise<CompletedIssueSynchronizationResult> {
   const result = await listClosedIssues(api, repository);
   const trackedActorIds = new Set(trackedActors.map((actor) => actor.githubUserId));
@@ -175,7 +179,10 @@ export async function synchronizeCompletedIssues({
             trackedActorIds.has(event.closingPullRequestAuthorGithubUserId)),
       );
 
-    if (firstQualifyingEvent === undefined) {
+    if (
+      firstQualifyingEvent === undefined ||
+      !isWithinRange(firstQualifyingEvent.closedAt, since, until)
+    ) {
       return [];
     }
 
@@ -198,6 +205,10 @@ export async function synchronizeCompletedIssues({
     rateLimit: result.rateLimit,
     savedCount: synchronizedIssues.length,
   };
+}
+
+function isWithinRange(date: Date, since?: Date, until?: Date): boolean {
+  return (since === undefined || date >= since) && (until === undefined || date <= until);
 }
 
 async function listClosedIssues(
