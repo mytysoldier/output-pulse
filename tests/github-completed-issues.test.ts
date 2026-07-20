@@ -32,8 +32,8 @@ const trackedActors: TrackedActor[] = [
 function completedIssue(overrides: Partial<GitHubCompletedIssue> = {}): GitHubCompletedIssue {
   return {
     authorGithubUserId: 3,
-    closedAt: new Date("2026-07-01T00:00:00Z"),
     closingPullRequestAuthorGithubUserIds: [],
+    firstClosedAt: new Date("2026-07-01T00:00:00Z"),
     githubNodeId: "I_node_1",
     number: 10,
     title: "完了したIssue",
@@ -71,8 +71,8 @@ describe("synchronizeCompletedIssues", () => {
               nodes: [
                 {
                   author: { databaseId: 1 },
-                  closedAt: "2026-07-01T00:00:00Z",
-                  timelineItems: { nodes: [{ closer: { author: { databaseId: 2 } } }] },
+                  firstClosedEvent: { nodes: [{ createdAt: "2026-07-01T00:00:00Z" }] },
+                  latestClosedEvent: { nodes: [{ closer: { author: { databaseId: 2 } } }] },
                   id: "I_node_1",
                   number: 10,
                   title: "完了したIssue",
@@ -94,6 +94,7 @@ describe("synchronizeCompletedIssues", () => {
     expect(page.issues[0]).toMatchObject({
       authorGithubUserId: 1,
       closingPullRequestAuthorGithubUserIds: [2],
+      firstClosedAt: new Date("2026-07-01T00:00:00Z"),
     });
   });
 
@@ -107,10 +108,10 @@ describe("synchronizeCompletedIssues", () => {
               nodes: [
                 {
                   author: { databaseId: 3 },
-                  closedAt: "2026-07-01T00:00:00Z",
                   id: "I_node_1",
                   number: 10,
-                  timelineItems: { nodes: [{ closer: null }] },
+                  firstClosedEvent: { nodes: [{ createdAt: "2026-07-01T00:00:00Z" }] },
+                  latestClosedEvent: { nodes: [{ closer: null }] },
                   title: "完了したIssue",
                 },
               ],
@@ -211,7 +212,7 @@ describe("synchronizeCompletedIssues", () => {
           endCursor: null,
           issues: [
             completedIssue({
-              closedAt: new Date("2026-07-03T00:00:00Z"),
+              firstClosedAt: new Date("2026-07-03T00:00:00Z"),
               title: "変更後のタイトル",
             }),
           ],

@@ -15,12 +15,16 @@ const CLOSED_ISSUES_QUERY = `
           id
           number
           title
-          closedAt
           author {
             ... on User { databaseId }
             ... on Bot { databaseId }
           }
-          timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
+          firstClosedEvent: timelineItems(first: 1, itemTypes: [CLOSED_EVENT]) {
+            nodes {
+              ... on ClosedEvent { createdAt }
+            }
+          }
+          latestClosedEvent: timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
             nodes {
               ... on ClosedEvent {
                 closer {
@@ -44,8 +48,8 @@ const CLOSED_ISSUES_QUERY = `
 
 export interface GitHubCompletedIssue {
   authorGithubUserId: number | null;
-  closedAt: Date;
   closingPullRequestAuthorGithubUserIds: number[];
+  firstClosedAt: Date;
   githubNodeId: string;
   number: number;
   title: string;
@@ -82,8 +86,10 @@ interface ClosedIssuesQueryResponse {
     issues: {
       nodes: Array<{
         author: GitHubActor | null;
-        closedAt: string | null;
-        timelineItems: {
+        firstClosedEvent: {
+          nodes: Array<{ createdAt: string }>;
+        };
+        latestClosedEvent: {
           nodes: Array<{
             closer: { author: GitHubActor | null } | null;
           }>;
@@ -219,18 +225,21 @@ async function listClosedIssues(
 }
 
 function toGitHubCompletedIssue(issue: ClosedIssueNode): GitHubCompletedIssue[] {
-  if (issue.closedAt === null) {
+  const firstClosedAt = issue.firstClosedEvent.nodes[0]?.createdAt;
+  if (firstClosedAt === undefined) {
     return [];
   }
 
   return [
     {
       authorGithubUserId: issue.author?.databaseId ?? null,
-      closedAt: new Date(issue.closedAt),
-      closingPullRequestAuthorGithubUserIds: issue.timelineItems.nodes.flatMap((closedEvent) => {
-        const databaseId = closedEvent.closer?.author?.databaseId;
-        return databaseId === undefined || databaseId === null ? [] : [databaseId];
-      }),
+      closingPullRequestAuthorGithubUserIds: issue.latestClosedEvent.nodes.flatMap(
+        (closedEvent) => {
+          const databaseId = closedEvent.closer?.author?.databaseId;
+          return databaseId === undefined || databaseId === null ? [] : [databaseId];
+        },
+      ),
+      firstClosedAt: new Date(firstClosedAt),
       githubNodeId: issue.id,
       number: issue.number,
       title: issue.title,
@@ -252,7 +261,7 @@ function toPersistedCompletedIssue({
   synchronizedAt: Date;
 }): PersistedCompletedIssue {
   return {
-    firstClosedAt: issue.closedAt,
+    firstClosedAt: issue.firstClosedAt,
     githubNodeId: issue.githubNodeId,
     lastSeenAt: synchronizedAt,
     matchedByAuthor,
