@@ -79,7 +79,13 @@ function createStores(): RepositorySynchronizationStores & { persisted: string[]
     },
   };
 
-  return { commitStore, completedIssueStore, persisted, pullRequestStore };
+  return {
+    commitStore,
+    completedIssueStore,
+    async markRepositorySynchronized() {},
+    persisted,
+    pullRequestStore,
+  };
 }
 
 function createTransactionRunner(
@@ -233,6 +239,39 @@ describe("synchronize", () => {
       from: new Date("2026-07-17T12:00:00.000Z"),
       to: new Date("2026-07-20T00:00:00.000Z"),
     });
+  });
+
+  it("uses each repository's last success time and records only successful repositories", async () => {
+    const stores = createStores();
+    const secondRepository = {
+      ...repository,
+      githubRepositoryId: 102,
+      lastSyncedAt: new Date("2026-07-19T12:00:00.000Z"),
+      name: "second-repository",
+    };
+    const dependencies = createDependencies({
+      repositories: [repository, secondRepository],
+      transactionRunner: createTransactionRunner(stores),
+    });
+    const requestedSince: Array<Date | undefined> = [];
+    const synchronizedRepositories: number[] = [];
+    stores.markRepositorySynchronized = async (repositoryId) => {
+      synchronizedRepositories.push(repositoryId);
+    };
+    dependencies.commitApi = {
+      async listDefaultBranchCommitsPage(input) {
+        requestedSince.push(input.since);
+        return { commits: [], rateLimit: {} };
+      },
+    };
+
+    await synchronize({ mode: "incremental", triggerType: "manual" }, dependencies);
+
+    expect(requestedSince).toEqual([
+      new Date("2026-06-20T00:00:00.000Z"),
+      new Date("2026-07-17T12:00:00.000Z"),
+    ]);
+    expect(synchronizedRepositories).toEqual([101, 102]);
   });
 
   it("accepts range and full modes, while rejecting invalid mode-specific dates", async () => {

@@ -6,6 +6,7 @@ import {
   type CompletedIssueStore,
 } from "../db/completed-issue-store.js";
 import { createPullRequestStore, type PullRequestStore } from "../db/pull-request-store.js";
+import { repositories } from "../db/schema/index.js";
 import type {
   SyncMode,
   SyncRunStatus,
@@ -23,6 +24,7 @@ import type {
   SynchronizationTargets,
   TargetRepository,
 } from "../github/targets.js";
+import { eq } from "drizzle-orm";
 
 const INITIAL_SYNC_DAYS = 30;
 const INCREMENTAL_SYNC_OVERLAP_HOURS = 48;
@@ -42,6 +44,7 @@ export interface SynchronizationPeriod {
 export interface RepositorySynchronizationStores {
   commitStore: CommitStore;
   completedIssueStore: CompletedIssueStore;
+  markRepositorySynchronized(repositoryId: number, synchronizedAt: Date): Promise<void>;
   pullRequestStore: PullRequestStore;
 }
 
@@ -98,18 +101,21 @@ export async function synchronize(
 
     for (const repository of targets.repositories) {
       try {
-        const result = await dependencies.repositoryTransactions.transaction((stores) =>
-          synchronizeRepository({
+        const repositoryPeriod = resolveRepositoryPeriod(request, startedAt, repository);
+        const result = await dependencies.repositoryTransactions.transaction(async (stores) => {
+          const synchronized = await synchronizeRepository({
             commitApi: dependencies.commitApi,
             completedIssueApi: dependencies.completedIssueApi,
-            period,
+            period: repositoryPeriod,
             pullRequestApi: dependencies.pullRequestApi,
             repository,
             stores,
             synchronizedAt: startedAt,
             targets,
-          }),
-        );
+          });
+          await stores.markRepositorySynchronized(repository.githubRepositoryId, startedAt);
+          return synchronized;
+        });
         aggregate.fetchedCount += result.fetchedCount;
         aggregate.insertedCount += result.insertedCount;
         aggregate.updatedCount += result.updatedCount;
@@ -166,6 +172,12 @@ export function createRepositoryTransactionRunner(
         operation({
           commitStore: createCommitStore(transaction),
           completedIssueStore: createCompletedIssueStore(transaction),
+          async markRepositorySynchronized(repositoryId, synchronizedAt) {
+            await transaction
+              .update(repositories)
+              .set({ lastSyncedAt: synchronizedAt })
+              .where(eq(repositories.githubRepositoryId, repositoryId));
+          },
           pullRequestStore: createPullRequestStore(transaction),
         }),
       );
@@ -279,6 +291,27 @@ async function resolvePeriod(
       lastSuccessfulFinishedAt === undefined
         ? subtractDays(startedAt, INITIAL_SYNC_DAYS)
         : subtractHours(lastSuccessfulFinishedAt, INCREMENTAL_SYNC_OVERLAP_HOURS),
+    to: startedAt,
+  };
+}
+
+function resolveRepositoryPeriod(
+  request: SynchronizationRequest,
+  startedAt: Date,
+  repository: TargetRepository,
+): SynchronizationPeriod {
+  if (request.mode === "range") {
+    return { from: request.from, to: request.to };
+  }
+  if (request.mode === "full") {
+    return {};
+  }
+
+  return {
+    from:
+      repository.lastSyncedAt === undefined
+        ? subtractDays(startedAt, INITIAL_SYNC_DAYS)
+        : subtractHours(repository.lastSyncedAt, INCREMENTAL_SYNC_OVERLAP_HOURS),
     to: startedAt,
   };
 }
