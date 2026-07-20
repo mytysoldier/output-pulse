@@ -7,6 +7,7 @@ import type {
 import type { TrackedActor } from "../src/db/target-store.js";
 import {
   createGitHubCompletedIssueApi,
+  type GitHubClosedIssueEvent,
   type GitHubCompletedIssue,
   type GitHubCompletedIssueApi,
   synchronizeCompletedIssues,
@@ -32,11 +33,18 @@ const trackedActors: TrackedActor[] = [
 function completedIssue(overrides: Partial<GitHubCompletedIssue> = {}): GitHubCompletedIssue {
   return {
     authorGithubUserId: 3,
-    closingPullRequestAuthorGithubUserIds: [],
-    firstClosedAt: new Date("2026-07-01T00:00:00Z"),
+    closedEvents: [closedEvent()],
     githubNodeId: "I_node_1",
     number: 10,
     title: "完了したIssue",
+    ...overrides,
+  };
+}
+
+function closedEvent(overrides: Partial<GitHubClosedIssueEvent> = {}): GitHubClosedIssueEvent {
+  return {
+    closedAt: new Date("2026-07-01T00:00:00Z"),
+    closingPullRequestAuthorGithubUserId: null,
     ...overrides,
   };
 }
@@ -71,8 +79,14 @@ describe("synchronizeCompletedIssues", () => {
               nodes: [
                 {
                   author: { databaseId: 1 },
-                  firstClosedEvent: { nodes: [{ createdAt: "2026-07-01T00:00:00Z" }] },
-                  latestClosedEvent: { nodes: [{ closer: { author: { databaseId: 2 } } }] },
+                  closedEvents: {
+                    nodes: [
+                      {
+                        createdAt: "2026-07-01T00:00:00Z",
+                        closer: { author: { databaseId: 2 } },
+                      },
+                    ],
+                  },
                   id: "I_node_1",
                   number: 10,
                   title: "完了したIssue",
@@ -93,8 +107,12 @@ describe("synchronizeCompletedIssues", () => {
 
     expect(page.issues[0]).toMatchObject({
       authorGithubUserId: 1,
-      closingPullRequestAuthorGithubUserIds: [2],
-      firstClosedAt: new Date("2026-07-01T00:00:00Z"),
+      closedEvents: [
+        {
+          closedAt: new Date("2026-07-01T00:00:00Z"),
+          closingPullRequestAuthorGithubUserId: 2,
+        },
+      ],
     });
   });
 
@@ -110,8 +128,9 @@ describe("synchronizeCompletedIssues", () => {
                   author: { databaseId: 3 },
                   id: "I_node_1",
                   number: 10,
-                  firstClosedEvent: { nodes: [{ createdAt: "2026-07-01T00:00:00Z" }] },
-                  latestClosedEvent: { nodes: [{ closer: null }] },
+                  closedEvents: {
+                    nodes: [{ createdAt: "2026-07-01T00:00:00Z", closer: null }],
+                  },
                   title: "完了したIssue",
                 },
               ],
@@ -128,7 +147,7 @@ describe("synchronizeCompletedIssues", () => {
       repository: "private-project",
     });
 
-    expect(page.issues[0]?.closingPullRequestAuthorGithubUserIds).toEqual([]);
+    expect(page.issues[0]?.closedEvents).toEqual([closedEvent()]);
   });
 
   it("saves issues matched by each OR condition exactly once", async () => {
@@ -136,12 +155,12 @@ describe("synchronizeCompletedIssues", () => {
       [
         completedIssue({ authorGithubUserId: 1, githubNodeId: "I_author" }),
         completedIssue({
-          closingPullRequestAuthorGithubUserIds: [2],
+          closedEvents: [closedEvent({ closingPullRequestAuthorGithubUserId: 2 })],
           githubNodeId: "I_closing_pr",
         }),
         completedIssue({
           authorGithubUserId: 1,
-          closingPullRequestAuthorGithubUserIds: [2],
+          closedEvents: [closedEvent({ closingPullRequestAuthorGithubUserId: 2 })],
           githubNodeId: "I_both",
         }),
         completedIssue({ githubNodeId: "I_url_only" }),
@@ -189,6 +208,38 @@ describe("synchronizeCompletedIssues", () => {
     });
   });
 
+  it("uses the first close event that matches a tracked actor closing pull request", async () => {
+    const api: GitHubCompletedIssueApi = {
+      async listClosedIssuesPage() {
+        return {
+          endCursor: null,
+          hasNextPage: false,
+          issues: [
+            completedIssue({
+              closedEvents: [
+                closedEvent(),
+                closedEvent({
+                  closedAt: new Date("2026-07-03T00:00:00Z"),
+                  closingPullRequestAuthorGithubUserId: 2,
+                }),
+              ],
+            }),
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+    const store = createStore();
+
+    await synchronizeCompletedIssues({ api, repository, store, trackedActors });
+
+    expect(store.issues.get("I_node_1")).toMatchObject({
+      firstClosedAt: new Date("2026-07-03T00:00:00Z"),
+      matchedByAuthor: false,
+      matchedByClosingPr: true,
+    });
+  });
+
   it("preserves the first close time while updating a title after an issue is reopened", async () => {
     const store = createStore();
     const firstApi: GitHubCompletedIssueApi = {
@@ -212,7 +263,7 @@ describe("synchronizeCompletedIssues", () => {
           endCursor: null,
           issues: [
             completedIssue({
-              firstClosedAt: new Date("2026-07-03T00:00:00Z"),
+              closedEvents: [closedEvent({ closedAt: new Date("2026-07-03T00:00:00Z") })],
               title: "変更後のタイトル",
             }),
           ],

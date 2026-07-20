@@ -19,14 +19,10 @@ const CLOSED_ISSUES_QUERY = `
             ... on User { databaseId }
             ... on Bot { databaseId }
           }
-          firstClosedEvent: timelineItems(first: 1, itemTypes: [CLOSED_EVENT]) {
-            nodes {
-              ... on ClosedEvent { createdAt }
-            }
-          }
-          latestClosedEvent: timelineItems(last: 1, itemTypes: [CLOSED_EVENT]) {
+          closedEvents: timelineItems(first: 100, itemTypes: [CLOSED_EVENT]) {
             nodes {
               ... on ClosedEvent {
+                createdAt
                 closer {
                   ... on PullRequest {
                     author {
@@ -48,11 +44,15 @@ const CLOSED_ISSUES_QUERY = `
 
 export interface GitHubCompletedIssue {
   authorGithubUserId: number | null;
-  closingPullRequestAuthorGithubUserIds: number[];
-  firstClosedAt: Date;
+  closedEvents: GitHubClosedIssueEvent[];
   githubNodeId: string;
   number: number;
   title: string;
+}
+
+export interface GitHubClosedIssueEvent {
+  closedAt: Date;
+  closingPullRequestAuthorGithubUserId: number | null;
 }
 
 export interface GitHubCompletedIssuePage {
@@ -86,11 +86,9 @@ interface ClosedIssuesQueryResponse {
     issues: {
       nodes: Array<{
         author: GitHubActor | null;
-        firstClosedEvent: {
-          nodes: Array<{ createdAt: string }>;
-        };
-        latestClosedEvent: {
+        closedEvents: {
           nodes: Array<{
+            createdAt: string;
             closer: { author: GitHubActor | null } | null;
           }>;
         };
@@ -163,11 +161,21 @@ export async function synchronizeCompletedIssues({
   const synchronizedIssues = result.issues.flatMap((issue) => {
     const matchedByAuthor =
       issue.authorGithubUserId !== null && trackedActorIds.has(issue.authorGithubUserId);
-    const matchedByClosingPr = issue.closingPullRequestAuthorGithubUserIds.some(
-      (authorGithubUserId) => trackedActorIds.has(authorGithubUserId),
+    const matchedByClosingPr = issue.closedEvents.some(
+      (event) =>
+        event.closingPullRequestAuthorGithubUserId !== null &&
+        trackedActorIds.has(event.closingPullRequestAuthorGithubUserId),
     );
+    const firstQualifyingEvent = issue.closedEvents
+      .toSorted((left, right) => left.closedAt.getTime() - right.closedAt.getTime())
+      .find(
+        (event) =>
+          matchedByAuthor ||
+          (event.closingPullRequestAuthorGithubUserId !== null &&
+            trackedActorIds.has(event.closingPullRequestAuthorGithubUserId)),
+      );
 
-    if (!matchedByAuthor && !matchedByClosingPr) {
+    if (firstQualifyingEvent === undefined) {
       return [];
     }
 
@@ -176,6 +184,7 @@ export async function synchronizeCompletedIssues({
         issue,
         matchedByAuthor,
         matchedByClosingPr,
+        firstClosedAt: firstQualifyingEvent.closedAt,
         repository,
         synchronizedAt,
       }),
@@ -225,21 +234,22 @@ async function listClosedIssues(
 }
 
 function toGitHubCompletedIssue(issue: ClosedIssueNode): GitHubCompletedIssue[] {
-  const firstClosedAt = issue.firstClosedEvent.nodes[0]?.createdAt;
-  if (firstClosedAt === undefined) {
+  const closedEvents: GitHubClosedIssueEvent[] = issue.closedEvents.nodes.map((closedEvent) => {
+    const databaseId = closedEvent.closer?.author?.databaseId;
+    return {
+      closedAt: new Date(closedEvent.createdAt),
+      closingPullRequestAuthorGithubUserId: databaseId ?? null,
+    };
+  });
+
+  if (closedEvents.length === 0) {
     return [];
   }
 
   return [
     {
       authorGithubUserId: issue.author?.databaseId ?? null,
-      closingPullRequestAuthorGithubUserIds: issue.latestClosedEvent.nodes.flatMap(
-        (closedEvent) => {
-          const databaseId = closedEvent.closer?.author?.databaseId;
-          return databaseId === undefined || databaseId === null ? [] : [databaseId];
-        },
-      ),
-      firstClosedAt: new Date(firstClosedAt),
+      closedEvents,
       githubNodeId: issue.id,
       number: issue.number,
       title: issue.title,
@@ -251,17 +261,19 @@ function toPersistedCompletedIssue({
   issue,
   matchedByAuthor,
   matchedByClosingPr,
+  firstClosedAt,
   repository,
   synchronizedAt,
 }: {
   issue: GitHubCompletedIssue;
   matchedByAuthor: boolean;
   matchedByClosingPr: boolean;
+  firstClosedAt: Date;
   repository: TargetRepository;
   synchronizedAt: Date;
 }): PersistedCompletedIssue {
   return {
-    firstClosedAt: issue.firstClosedAt,
+    firstClosedAt,
     githubNodeId: issue.githubNodeId,
     lastSeenAt: synchronizedAt,
     matchedByAuthor,
