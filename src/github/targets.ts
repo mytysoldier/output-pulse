@@ -35,6 +35,7 @@ export interface GitHubRepositoryApi {
 }
 
 export interface TargetRepository extends PersistedRepository {
+  lastSyncedAt?: Date;
   name: string;
   ownerLogin: string;
 }
@@ -126,17 +127,35 @@ export async function loadSynchronizationTargets({
   const { rateLimit, repositories } = await listTargetRepositories(api, owner);
 
   await store.upsertRepositories(repositories.map(toPersistedRepository));
-  const [enabledRepositoryIds, trackedActors] = await Promise.all([
-    store.listEnabledRepositoryIds(),
+  const [enabledRepositories, trackedActors] = await Promise.all([
+    store.listEnabledRepositories === undefined
+      ? store
+          .listEnabledRepositoryIds()
+          .then((repositoryIds) =>
+            repositoryIds.map((githubRepositoryId) => ({ githubRepositoryId, lastSyncedAt: null })),
+          )
+      : store.listEnabledRepositories(),
     store.listEnabledTrackedActors(),
   ]);
-  const enabledRepositoryIdSet = new Set(enabledRepositoryIds);
+  const enabledRepositoriesById = new Map(
+    enabledRepositories.map((repository) => [repository.githubRepositoryId, repository]),
+  );
 
   return {
     rateLimit,
-    repositories: repositories.filter((repository) =>
-      enabledRepositoryIdSet.has(repository.githubRepositoryId),
-    ),
+    repositories: repositories.flatMap((repository) => {
+      const enabledRepository = enabledRepositoriesById.get(repository.githubRepositoryId);
+      return enabledRepository === undefined
+        ? []
+        : [
+            {
+              ...repository,
+              ...(enabledRepository.lastSyncedAt === null
+                ? {}
+                : { lastSyncedAt: enabledRepository.lastSyncedAt }),
+            },
+          ];
+    }),
     trackedActors,
   };
 }

@@ -1,6 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 
 import type { PersistedPullRequest, PullRequestStore } from "../db/pull-request-store.js";
+import type { UpsertResult } from "../db/upsert-result.js";
 import type { TrackedActor } from "../db/target-store.js";
 import type { GitHubRateLimit, TargetRepository } from "./targets.js";
 import { GitHubApiError } from "./targets.js";
@@ -37,8 +38,10 @@ export interface GitHubPullRequestApi {
 
 export interface PullRequestSynchronizationResult {
   fetchedCount: number;
+  insertedCount: number;
   rateLimit: GitHubRateLimit;
   savedCount: number;
+  updatedCount: number;
 }
 
 /**
@@ -82,15 +85,19 @@ export function createGitHubPullRequestApi(client: Octokit): GitHubPullRequestAp
 export async function synchronizePullRequests({
   api,
   repository,
+  since,
   store,
   synchronizedAt = new Date(),
   trackedActors,
+  until,
 }: {
   api: GitHubPullRequestApi;
   repository: TargetRepository;
+  since?: Date;
   store: PullRequestStore;
   synchronizedAt?: Date;
   trackedActors: TrackedActor[];
+  until?: Date;
 }): Promise<PullRequestSynchronizationResult> {
   const result = await listPullRequests(api, repository);
   const trackedActorIds = new Set(trackedActors.map((actor) => actor.githubUserId));
@@ -98,17 +105,69 @@ export async function synchronizePullRequests({
     .filter(
       (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
         pullRequest.authorGithubUserId !== null &&
-        trackedActorIds.has(pullRequest.authorGithubUserId),
+        trackedActorIds.has(pullRequest.authorGithubUserId) &&
+        isWithinPeriod(pullRequest, since, until),
     )
     .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
 
-  await store.upsertPullRequests(synchronizedPullRequests);
+  const refreshedPullRequests = result.pullRequests
+    .filter(
+      (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
+        pullRequest.authorGithubUserId !== null &&
+        trackedActorIds.has(pullRequest.authorGithubUserId) &&
+        isMergeRefreshCandidate(pullRequest, since, until),
+    )
+    .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
+
+  const persistence = toUpsertResult(
+    await store.upsertPullRequests(synchronizedPullRequests),
+    synchronizedPullRequests.length,
+  );
+  const refresh = toUpsertResult(
+    store.refreshPullRequests === undefined
+      ? undefined
+      : await store.refreshPullRequests(refreshedPullRequests),
+    0,
+  );
 
   return {
     fetchedCount: result.pullRequests.length,
+    insertedCount: persistence.insertedCount,
     rateLimit: result.rateLimit,
-    savedCount: synchronizedPullRequests.length,
+    savedCount: persistence.insertedCount + persistence.updatedCount + refresh.updatedCount,
+    updatedCount: persistence.updatedCount + refresh.updatedCount,
   };
+}
+
+function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number): UpsertResult {
+  return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
+}
+
+/**
+ * 対象期間外の指標を公開しないため、期間指定時は作成・マージの両日時が範囲内のPRだけを保存する。
+ * 未マージPRは作成日時だけで判定する。
+ */
+function isWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Date): boolean {
+  return (
+    isWithinRange(pullRequest.createdAt, since, until) &&
+    (pullRequest.mergedAt === null || isWithinRange(pullRequest.mergedAt, since, until))
+  );
+}
+
+function isMergeRefreshCandidate(
+  pullRequest: GitHubPullRequest,
+  since?: Date,
+  until?: Date,
+): boolean {
+  return (
+    pullRequest.mergedAt !== null &&
+    !isWithinRange(pullRequest.createdAt, since, until) &&
+    isWithinRange(pullRequest.mergedAt, since, until)
+  );
+}
+
+function isWithinRange(date: Date, since?: Date, until?: Date): boolean {
+  return (since === undefined || date >= since) && (until === undefined || date <= until);
 }
 
 /**

@@ -63,6 +63,21 @@ function createStore(): CompletedIssueStore & { issues: Map<string, PersistedCom
         });
       }
     },
+    async refreshCompletedIssues(issues) {
+      let updatedCount = 0;
+      for (const issue of issues) {
+        const existing = this.issues.get(issue.githubNodeId);
+        if (existing !== undefined) {
+          this.issues.set(issue.githubNodeId, {
+            ...existing,
+            lastSeenAt: issue.lastSeenAt,
+            title: issue.title,
+          });
+          updatedCount += 1;
+        }
+      }
+      return { insertedCount: 0, updatedCount };
+    },
   };
 }
 
@@ -191,7 +206,13 @@ describe("synchronizeCompletedIssues", () => {
     });
 
     expect(cursors).toEqual([undefined, "page-2"]);
-    expect(result).toEqual({ fetchedCount: 5, rateLimit: { remaining: 4980 }, savedCount: 4 });
+    expect(result).toEqual({
+      fetchedCount: 5,
+      insertedCount: 4,
+      rateLimit: { remaining: 4980 },
+      savedCount: 4,
+      updatedCount: 0,
+    });
     expect(store.issues.size).toBe(4);
     expect(store.issues.get("I_url_only")).toBeUndefined();
     expect(store.issues.get("I_author")).toMatchObject({
@@ -238,6 +259,77 @@ describe("synchronizeCompletedIssues", () => {
       matchedByAuthor: false,
       matchedByClosingPr: true,
     });
+  });
+
+  it("saves only completed issues whose qualifying close is within a requested period", async () => {
+    const api: GitHubCompletedIssueApi = {
+      async listClosedIssuesPage() {
+        return {
+          endCursor: null,
+          hasNextPage: false,
+          issues: [
+            completedIssue({ githubNodeId: "I_before_period" }),
+            completedIssue({
+              closedEvents: [closedEvent({ closedAt: new Date("2026-07-03T00:00:00Z") })],
+              githubNodeId: "I_in_period",
+            }),
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+    const store = createStore();
+
+    const result = await synchronizeCompletedIssues({
+      api,
+      repository,
+      since: new Date("2026-07-02T00:00:00Z"),
+      store,
+      trackedActors: [{ actorType: "user", githubLogin: "mytysoldier", githubUserId: 3 }],
+      until: new Date("2026-07-04T00:00:00Z"),
+    });
+
+    expect(result).toMatchObject({ fetchedCount: 2, savedCount: 1 });
+    expect([...store.issues.keys()]).toEqual(["I_in_period"]);
+  });
+
+  it("refreshes an existing older completed issue without inserting it during incremental sync", async () => {
+    const store = createStore();
+    await store.upsertCompletedIssues([
+      {
+        firstClosedAt: new Date("2026-07-01T00:00:00Z"),
+        githubNodeId: "I_node_1",
+        lastSeenAt: new Date("2026-07-01T00:00:00Z"),
+        matchedByAuthor: true,
+        matchedByClosingPr: false,
+        number: 10,
+        repositoryId: 101,
+        title: "旧タイトル",
+        visibility: "private",
+      },
+    ]);
+    const api: GitHubCompletedIssueApi = {
+      async listClosedIssuesPage() {
+        return {
+          endCursor: null,
+          hasNextPage: false,
+          issues: [completedIssue({ title: "新タイトル" })],
+          rateLimit: {},
+        };
+      },
+    };
+
+    const result = await synchronizeCompletedIssues({
+      api,
+      repository,
+      since: new Date("2026-07-18T00:00:00Z"),
+      store,
+      synchronizedAt: new Date("2026-07-20T00:00:00Z"),
+      trackedActors: [{ actorType: "user", githubLogin: "mytysoldier", githubUserId: 3 }],
+    });
+
+    expect(result).toMatchObject({ insertedCount: 0, savedCount: 1, updatedCount: 1 });
+    expect(store.issues.get("I_node_1")).toMatchObject({ title: "新タイトル" });
   });
 
   it("preserves the first close time while updating a title after an issue is reopened", async () => {
