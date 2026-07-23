@@ -321,6 +321,10 @@ function resolveRepositoryPeriod(
 }
 
 function validateRequest(request: SynchronizationRequest): void {
+  if (!isSyncMode(request.mode)) {
+    throw new Error("同期モードはincremental、range、fullのいずれかで指定してください");
+  }
+
   if (request.mode === "range") {
     if (!isValidDate(request.from) || !isValidDate(request.to) || request.from > request.to) {
       throw new Error("期間指定同期には有効な開始日時と終了日時が必要です");
@@ -331,6 +335,10 @@ function validateRequest(request: SynchronizationRequest): void {
   if (request.from !== undefined || request.to !== undefined) {
     throw new Error("期間は期間指定同期でのみ指定できます");
   }
+}
+
+function isSyncMode(value: string): value is SyncMode {
+  return value === "incremental" || value === "range" || value === "full";
 }
 
 function isValidDate(value: Date | undefined): value is Date {

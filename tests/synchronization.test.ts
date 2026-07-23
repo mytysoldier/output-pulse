@@ -313,6 +313,9 @@ describe("synchronize", () => {
     await expect(
       synchronize({ from, mode: "full", triggerType: "manual" }, dependencies),
     ).rejects.toThrow("期間は期間指定同期");
+    await expect(
+      synchronize({ mode: "ful" as never, triggerType: "manual" }, dependencies),
+    ).rejects.toThrow("同期モードはincremental、range、fullのいずれか");
   });
 
   it("rolls back only a failed repository and continues later repositories", async () => {
