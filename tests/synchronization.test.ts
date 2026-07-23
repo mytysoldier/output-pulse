@@ -350,4 +350,17 @@ describe("synchronize", () => {
       status: "failure",
     });
   });
+
+  it("surfaces a final sync-run write failure without replacing the committed result", async () => {
+    const stores = createStores();
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+    dependencies.syncRunStore.finishSyncRun = async () => {
+      throw new Error("sync run write failed");
+    };
+
+    await expect(
+      synchronize({ mode: "full", triggerType: "manual" }, dependencies),
+    ).rejects.toThrow("sync run write failed");
+    expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
+  });
 });

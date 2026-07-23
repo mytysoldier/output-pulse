@@ -95,55 +95,9 @@ export async function synchronize(
     triggerType: request.triggerType,
   });
 
+  let targets: SynchronizationTargets;
   try {
-    const targets = await dependencies.loadTargets();
-    const aggregate = createAggregate(targets.rateLimit, targets.repositories.length);
-
-    for (const repository of targets.repositories) {
-      try {
-        const repositoryPeriod = resolveRepositoryPeriod(request, startedAt, repository);
-        const result = await dependencies.repositoryTransactions.transaction(async (stores) => {
-          const synchronized = await synchronizeRepository({
-            commitApi: dependencies.commitApi,
-            completedIssueApi: dependencies.completedIssueApi,
-            period: repositoryPeriod,
-            pullRequestApi: dependencies.pullRequestApi,
-            repository,
-            stores,
-            synchronizedAt: startedAt,
-            targets,
-          });
-          if (request.mode !== "range") {
-            await stores.markRepositorySynchronized(repository.githubRepositoryId, startedAt);
-          }
-          return synchronized;
-        });
-        aggregate.fetchedCount += result.fetchedCount;
-        aggregate.insertedCount += result.insertedCount;
-        aggregate.updatedCount += result.updatedCount;
-        aggregate.rateLimitRemaining = lowestRateLimit(
-          aggregate.rateLimitRemaining,
-          result.rateLimitRemaining,
-        );
-        aggregate.repositorySucceeded += 1;
-      } catch {
-        aggregate.repositoryFailed += 1;
-      }
-    }
-
-    const status = resolveStatus(aggregate.repositorySucceeded, aggregate.repositoryFailed);
-    const result: SynchronizationResult = {
-      ...aggregate,
-      period,
-      status,
-      syncRunId,
-      updatedCount: aggregate.updatedCount,
-    };
-    await dependencies.syncRunStore.finishSyncRun(
-      syncRunId,
-      toFinishInput(result, dependencies.now?.() ?? new Date()),
-    );
-    return result;
+    targets = await dependencies.loadTargets();
   } catch {
     const result: SynchronizationResult = {
       fetchedCount: 0,
@@ -162,6 +116,54 @@ export async function synchronize(
     );
     return result;
   }
+
+  const aggregate = createAggregate(targets.rateLimit, targets.repositories.length);
+
+  for (const repository of targets.repositories) {
+    try {
+      const repositoryPeriod = resolveRepositoryPeriod(request, startedAt, repository);
+      const result = await dependencies.repositoryTransactions.transaction(async (stores) => {
+        const synchronized = await synchronizeRepository({
+          commitApi: dependencies.commitApi,
+          completedIssueApi: dependencies.completedIssueApi,
+          period: repositoryPeriod,
+          pullRequestApi: dependencies.pullRequestApi,
+          repository,
+          stores,
+          synchronizedAt: startedAt,
+          targets,
+        });
+        if (request.mode !== "range") {
+          await stores.markRepositorySynchronized(repository.githubRepositoryId, startedAt);
+        }
+        return synchronized;
+      });
+      aggregate.fetchedCount += result.fetchedCount;
+      aggregate.insertedCount += result.insertedCount;
+      aggregate.updatedCount += result.updatedCount;
+      aggregate.rateLimitRemaining = lowestRateLimit(
+        aggregate.rateLimitRemaining,
+        result.rateLimitRemaining,
+      );
+      aggregate.repositorySucceeded += 1;
+    } catch {
+      aggregate.repositoryFailed += 1;
+    }
+  }
+
+  const status = resolveStatus(aggregate.repositorySucceeded, aggregate.repositoryFailed);
+  const result: SynchronizationResult = {
+    ...aggregate,
+    period,
+    status,
+    syncRunId,
+    updatedCount: aggregate.updatedCount,
+  };
+  await dependencies.syncRunStore.finishSyncRun(
+    syncRunId,
+    toFinishInput(result, dependencies.now?.() ?? new Date()),
+  );
+  return result;
 }
 
 /** NodePgDatabaseのトランザクションごとに、リポジトリ同期で使うStoreを生成する。 */
