@@ -151,6 +151,15 @@ erDiagram
 
 タイトル、本文、URLは保存しない。
 
+### `app.pull_request_events`
+
+| 列 | 内容 |
+| --- | --- |
+| github_node_id + event_type | PRごとのcreated／mergedイベントを一意にする複合キー |
+| occurred_at | イベントの集計日時 |
+
+`pull_requests`は現在状態、`pull_request_events`は期間集計の事実として分離する。期間指定同期では対象期間内のイベントだけを保存し、同じ期間を再同期しても複合キーで重複計上しない。既存の`pull_requests`はMigrationでcreated／mergedイベントへバックフィルする。
+
 ### `app.completed_issues`
 
 | 列 | 内容 |
@@ -193,6 +202,7 @@ ViewはリポジトリID、リポジトリ名、GitHub URL、秘密情報を返�
 
 - commits: `committed_at`, `author_github_user_id`
 - pull_requests: `created_at`, `merged_at`, `author_github_user_id`
+- pull_request_events: `occurred_at`
 - completed_issues: `first_closed_at`
 - sync_runs: `started_at`, `status`
 

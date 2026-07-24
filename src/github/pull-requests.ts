@@ -1,6 +1,10 @@
 import type { Octokit } from "@octokit/rest";
 
-import type { PersistedPullRequest, PullRequestStore } from "../db/pull-request-store.js";
+import type {
+  PersistedPullRequest,
+  PersistedPullRequestEvent,
+  PullRequestStore,
+} from "../db/pull-request-store.js";
 import type { UpsertResult } from "../db/upsert-result.js";
 import type { TrackedActor } from "../db/target-store.js";
 import type { GitHubRateLimit, TargetRepository } from "./targets.js";
@@ -106,36 +110,30 @@ export async function synchronizePullRequests({
       (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
         pullRequest.authorGithubUserId !== null &&
         trackedActorIds.has(pullRequest.authorGithubUserId) &&
-        isWithinPeriod(pullRequest, since, until),
+        hasEventWithinPeriod(pullRequest, since, until),
     )
     .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
 
-  const refreshedPullRequests = result.pullRequests
+  const synchronizedEvents = result.pullRequests
     .filter(
       (pullRequest): pullRequest is GitHubPullRequest & { authorGithubUserId: number } =>
         pullRequest.authorGithubUserId !== null &&
-        trackedActorIds.has(pullRequest.authorGithubUserId) &&
-        isMergeRefreshCandidate(pullRequest, since, until),
+        trackedActorIds.has(pullRequest.authorGithubUserId),
     )
-    .map((pullRequest) => toPersistedPullRequest({ pullRequest, repository, synchronizedAt }));
+    .flatMap((pullRequest) => toPersistedEvents(pullRequest, since, until));
 
   const persistence = toUpsertResult(
     await store.upsertPullRequests(synchronizedPullRequests),
     synchronizedPullRequests.length,
   );
-  const refresh = toUpsertResult(
-    store.refreshPullRequests === undefined
-      ? undefined
-      : await store.refreshPullRequests(refreshedPullRequests),
-    0,
-  );
+  await store.upsertPullRequestEvents(synchronizedEvents);
 
   return {
     fetchedCount: result.pullRequests.length,
     insertedCount: persistence.insertedCount,
     rateLimit: result.rateLimit,
-    savedCount: persistence.insertedCount + persistence.updatedCount + refresh.updatedCount,
-    updatedCount: persistence.updatedCount + refresh.updatedCount,
+    savedCount: persistence.insertedCount + persistence.updatedCount,
+    updatedCount: persistence.updatedCount,
   };
 }
 
@@ -143,27 +141,39 @@ function toUpsertResult(result: UpsertResult | undefined, attemptedCount: number
   return result ?? { insertedCount: attemptedCount, updatedCount: 0 };
 }
 
-/**
- * 対象期間外の指標を公開しないため、期間指定時は作成・マージの両日時が範囲内のPRだけを保存する。
- * 未マージPRは作成日時だけで判定する。
- */
-function isWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Date): boolean {
+/** 作成またはマージのどちらかが対象期間内なら、PRの現在状態を保存する。 */
+function hasEventWithinPeriod(pullRequest: GitHubPullRequest, since?: Date, until?: Date): boolean {
   return (
-    isWithinRange(pullRequest.createdAt, since, until) &&
-    (pullRequest.mergedAt === null || isWithinRange(pullRequest.mergedAt, since, until))
+    isWithinRange(pullRequest.createdAt, since, until) ||
+    (pullRequest.mergedAt !== null && isWithinRange(pullRequest.mergedAt, since, until))
   );
 }
 
-function isMergeRefreshCandidate(
+/** 作成・マージイベントを期間ごとに独立させ、同じPRの複合主キーで重複を防ぐ。 */
+function toPersistedEvents(
   pullRequest: GitHubPullRequest,
   since?: Date,
   until?: Date,
-): boolean {
-  return (
-    pullRequest.mergedAt !== null &&
-    !isWithinRange(pullRequest.createdAt, since, until) &&
-    isWithinRange(pullRequest.mergedAt, since, until)
-  );
+): PersistedPullRequestEvent[] {
+  const events: PersistedPullRequestEvent[] = [];
+
+  if (isWithinRange(pullRequest.createdAt, since, until)) {
+    events.push({
+      eventType: "created",
+      githubNodeId: pullRequest.githubNodeId,
+      occurredAt: pullRequest.createdAt,
+    });
+  }
+
+  if (pullRequest.mergedAt !== null && isWithinRange(pullRequest.mergedAt, since, until)) {
+    events.push({
+      eventType: "merged",
+      githubNodeId: pullRequest.githubNodeId,
+      occurredAt: pullRequest.mergedAt,
+    });
+  }
+
+  return events;
 }
 
 function isWithinRange(date: Date, since?: Date, until?: Date): boolean {

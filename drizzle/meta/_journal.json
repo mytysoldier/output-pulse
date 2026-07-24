@@ -15,6 +15,13 @@
       "when": 1784461939183,
       "tag": "0001_create_dashboard_views",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784893541131,
+      "tag": "0002_cynical_blockbuster",
+      "breakpoints": true
     }
   ]
 }
