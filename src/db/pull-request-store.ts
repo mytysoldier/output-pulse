@@ -1,7 +1,7 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 
-import { pullRequests } from "./schema/index.js";
+import { pullRequestEvents, pullRequests } from "./schema/index.js";
 import type { UpsertResult } from "./upsert-result.js";
 
 export interface PersistedPullRequest {
@@ -16,8 +16,14 @@ export interface PersistedPullRequest {
   lastSeenAt: Date;
 }
 
+export interface PersistedPullRequestEvent {
+  eventType: "created" | "merged";
+  githubNodeId: string;
+  occurredAt: Date;
+}
+
 export interface PullRequestStore {
-  refreshPullRequests?(pullRequests: PersistedPullRequest[]): Promise<UpsertResult | undefined>;
+  upsertPullRequestEvents(events: PersistedPullRequestEvent[]): Promise<void>;
   upsertPullRequests(pullRequests: PersistedPullRequest[]): Promise<UpsertResult | undefined>;
 }
 
@@ -50,26 +56,12 @@ export function createPullRequestStore(database: NodePgDatabase): PullRequestSto
       return countUpserts(results);
     },
 
-    async refreshPullRequests(refreshedPullRequests) {
-      if (refreshedPullRequests.length === 0) {
-        return { insertedCount: 0, updatedCount: 0 };
+    async upsertPullRequestEvents(events) {
+      if (events.length === 0) {
+        return;
       }
 
-      const results = await Promise.all(
-        refreshedPullRequests.map((pullRequest) =>
-          database
-            .update(pullRequests)
-            .set({
-              lastSeenAt: pullRequest.lastSeenAt,
-              mergedAt: pullRequest.mergedAt,
-              state: pullRequest.state,
-            })
-            .where(eq(pullRequests.githubNodeId, pullRequest.githubNodeId))
-            .returning({ githubNodeId: pullRequests.githubNodeId }),
-        ),
-      );
-
-      return { insertedCount: 0, updatedCount: results.flat().length };
+      await database.insert(pullRequestEvents).values(events).onConflictDoNothing();
     },
   };
 }

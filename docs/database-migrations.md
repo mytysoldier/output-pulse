@@ -70,3 +70,7 @@ Migration用接続文字列はGitHub Actions Environment Secretへ保存し、Co
 ## View変更
 
 公開Viewの列名や型を維持する変更はGrafanaへ自動反映される。列名や意味を変更する場合は、Grafana Dashboard JSONの変更と同じIssue／PRで扱う。
+
+## Pull Requestイベントへの移行
+
+Migration `0002`は、既存の`app.pull_requests`からcreated／mergedイベントを`app.pull_request_events`へバックフィルしてから、`dashboard.daily_metrics`の参照先をイベントテーブルへ切り替える。既存の公開View列名と型は変更しない。バックフィルは複合キーに対する`ON CONFLICT DO NOTHING`を使うため、同じイベントを重複登録しない。

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { PersistedPullRequest, PullRequestStore } from "../src/db/pull-request-store.js";
+import type {
+  PersistedPullRequest,
+  PersistedPullRequestEvent,
+  PullRequestStore,
+} from "../src/db/pull-request-store.js";
 import type { TrackedActor } from "../src/db/target-store.js";
 import {
   type GitHubPullRequest,
@@ -34,33 +38,34 @@ const trackedOpenPullRequest: GitHubPullRequest = {
   state: "open",
 };
 
-function createStore(): PullRequestStore & { pullRequests: Map<string, PersistedPullRequest> } {
+function createStore(): PullRequestStore & {
+  events: Map<string, PersistedPullRequestEvent>;
+  pullRequests: Map<string, PersistedPullRequest>;
+} {
   return {
+    events: new Map(),
     pullRequests: new Map(),
     async upsertPullRequests(pullRequests) {
+      let insertedCount = 0;
       for (const pullRequest of pullRequests) {
         const existing = this.pullRequests.get(pullRequest.githubNodeId);
+        if (existing === undefined) {
+          insertedCount += 1;
+        }
         this.pullRequests.set(pullRequest.githubNodeId, {
           ...pullRequest,
           firstSeenAt: existing?.firstSeenAt ?? pullRequest.firstSeenAt,
         });
       }
+      return {
+        insertedCount,
+        updatedCount: pullRequests.length - insertedCount,
+      };
     },
-    async refreshPullRequests(pullRequests) {
-      let updatedCount = 0;
-      for (const pullRequest of pullRequests) {
-        const existing = this.pullRequests.get(pullRequest.githubNodeId);
-        if (existing !== undefined) {
-          this.pullRequests.set(pullRequest.githubNodeId, {
-            ...existing,
-            lastSeenAt: pullRequest.lastSeenAt,
-            mergedAt: pullRequest.mergedAt,
-            state: pullRequest.state,
-          });
-          updatedCount += 1;
-        }
+    async upsertPullRequestEvents(events) {
+      for (const event of events) {
+        this.events.set(`${event.githubNodeId}:${event.eventType}`, event);
       }
-      return { insertedCount: 0, updatedCount };
     },
   };
 }
@@ -105,6 +110,7 @@ describe("synchronizePullRequests", () => {
     });
     expect(store.pullRequests.size).toBe(101);
     expect(store.pullRequests.get("PR_node_other")).toBeUndefined();
+    expect(store.events.size).toBe(101);
     expect(store.pullRequests.get("PR_node_1")).toEqual({
       authorGithubUserId: 1,
       createdAt: new Date("2026-07-01T00:00:00Z"),
@@ -164,9 +170,10 @@ describe("synchronizePullRequests", () => {
       mergedAt: new Date("2026-07-03T00:00:00Z"),
       state: "merged",
     });
+    expect([...store.events.keys()]).toEqual(["PR_node_1:created", "PR_node_1:merged"]);
   });
 
-  it("saves only pull requests whose stored metrics are within a requested period", async () => {
+  it("saves only the created and merged events that are within a requested period", async () => {
     const api: GitHubPullRequestApi = {
       async listPullRequestsPage() {
         return {
@@ -208,11 +215,19 @@ describe("synchronizePullRequests", () => {
       until: new Date("2026-07-04T00:00:00Z"),
     });
 
-    expect(result).toMatchObject({ fetchedCount: 4, savedCount: 1 });
-    expect([...store.pullRequests.keys()]).toEqual(["PR_node_in_range"]);
+    expect(result).toMatchObject({ fetchedCount: 4, savedCount: 2 });
+    expect([...store.pullRequests.keys()]).toEqual([
+      "PR_node_in_range",
+      "PR_node_created_before_range",
+    ]);
+    expect([...store.events.keys()]).toEqual([
+      "PR_node_in_range:created",
+      "PR_node_in_range:merged",
+      "PR_node_created_before_range:merged",
+    ]);
   });
 
-  it("updates an existing PR merged in the period without inserting its older creation metric", async () => {
+  it("stores a merge event without recreating an older creation event", async () => {
     const store = createStore();
     await store.upsertPullRequests([
       {
@@ -253,6 +268,60 @@ describe("synchronizePullRequests", () => {
       mergedAt: new Date("2026-07-03T00:00:00Z"),
       state: "merged",
     });
+    expect([...store.events.keys()]).toEqual(["PR_node_1:merged"]);
+  });
+
+  it("stores a creation event without a later merge event", async () => {
+    const store = createStore();
+    const api: GitHubPullRequestApi = {
+      async listPullRequestsPage() {
+        return {
+          pullRequests: [
+            {
+              ...trackedOpenPullRequest,
+              createdAt: new Date("2026-07-03T00:00:00Z"),
+              mergedAt: new Date("2026-07-05T00:00:00Z"),
+              state: "closed",
+            },
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+
+    await synchronizePullRequests({
+      api,
+      repository,
+      since: new Date("2026-07-02T00:00:00Z"),
+      store,
+      trackedActors,
+      until: new Date("2026-07-04T00:00:00Z"),
+    });
+
+    expect([...store.events.keys()]).toEqual(["PR_node_1:created"]);
+  });
+
+  it("does not duplicate events when a period is synchronized again", async () => {
+    const store = createStore();
+    const api: GitHubPullRequestApi = {
+      async listPullRequestsPage() {
+        return {
+          pullRequests: [
+            {
+              ...trackedOpenPullRequest,
+              mergedAt: new Date("2026-07-03T00:00:00Z"),
+              state: "closed",
+            },
+          ],
+          rateLimit: {},
+        };
+      },
+    };
+
+    await synchronizePullRequests({ api, repository, store, trackedActors });
+    await synchronizePullRequests({ api, repository, store, trackedActors });
+
+    expect([...store.events.keys()]).toEqual(["PR_node_1:created", "PR_node_1:merged"]);
   });
 
   it("returns a sanitized typed error when GitHub rejects a request", async () => {

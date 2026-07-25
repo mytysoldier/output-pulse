@@ -69,6 +69,7 @@ function createStores(): RepositorySynchronizationStores & { persisted: string[]
     },
   };
   const pullRequestStore: PullRequestStore = {
+    async upsertPullRequestEvents() {},
     async upsertPullRequests(pullRequests: PersistedPullRequest[]) {
       persisted.push(...pullRequests.map((pullRequest) => `pr:${pullRequest.githubNodeId}`));
     },

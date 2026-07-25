@@ -83,6 +83,21 @@ export const pullRequests = app.table(
   ],
 );
 
+export const pullRequestEvents = app.table(
+  "pull_request_events",
+  {
+    githubNodeId: text("github_node_id")
+      .notNull()
+      .references(() => pullRequests.githubNodeId),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestampColumn("occurred_at").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.githubNodeId, table.eventType] }),
+    index("pull_request_events_occurred_at_idx").on(table.occurredAt),
+  ],
+);
+
 export const completedIssues = app.table(
   "completed_issues",
   {
