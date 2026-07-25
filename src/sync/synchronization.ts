@@ -53,6 +53,7 @@ export interface RepositoryTransactionRunner {
 }
 
 export interface SynchronizationResult {
+  errorSummary?: string;
   fetchedCount: number;
   insertedCount: number;
   period: SynchronizationPeriod;
@@ -61,6 +62,7 @@ export interface SynchronizationResult {
   repositorySucceeded: number;
   repositoryTotal: number;
   status: Exclude<SyncRunStatus, "running">;
+  startedAt: Date;
   syncRunId: number;
   updatedCount: number;
 }
@@ -100,19 +102,21 @@ export async function synchronize(
     targets = await dependencies.loadTargets();
   } catch {
     const result: SynchronizationResult = {
+      errorSummary: "同期対象の取得に失敗しました",
       fetchedCount: 0,
       insertedCount: 0,
       period,
       repositoryFailed: 0,
       repositorySucceeded: 0,
       repositoryTotal: 0,
+      startedAt,
       status: "failure",
       syncRunId,
       updatedCount: 0,
     };
     await dependencies.syncRunStore.finishSyncRun(
       syncRunId,
-      toFinishInput(result, dependencies.now?.() ?? new Date(), "同期対象の取得に失敗しました"),
+      toFinishInput(result, dependencies.now?.() ?? new Date()),
     );
     return result;
   }
@@ -154,8 +158,10 @@ export async function synchronize(
   const status = resolveStatus(aggregate.repositorySucceeded, aggregate.repositoryFailed);
   const result: SynchronizationResult = {
     ...aggregate,
+    ...(status === "success" ? {} : { errorSummary: "一部のリポジトリ同期に失敗しました" }),
     period,
     status,
+    startedAt,
     syncRunId,
     updatedCount: aggregate.updatedCount,
   };
@@ -363,9 +369,9 @@ function lowestRateLimit(left: number | undefined, right: number | undefined): n
   return Math.min(left, right);
 }
 
-function toFinishInput(result: SynchronizationResult, finishedAt: Date, errorSummary?: string) {
+function toFinishInput(result: SynchronizationResult, finishedAt: Date) {
   return {
-    ...(errorSummary === undefined ? {} : { errorSummary }),
+    ...(result.errorSummary === undefined ? {} : { errorSummary: result.errorSummary }),
     fetchedCount: result.fetchedCount,
     finishedAt,
     githubRateLimitRemaining: result.rateLimitRemaining,

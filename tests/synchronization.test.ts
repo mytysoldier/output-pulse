@@ -20,6 +20,8 @@ import {
   type RepositorySynchronizationStores,
   type RepositoryTransactionRunner,
 } from "../src/sync/synchronization.js";
+import { synchronizeAndNotify } from "../src/sync/synchronize-and-notify.js";
+import type { SlackNotifier, SynchronizationNotification } from "../src/slack/notification.js";
 
 const now = new Date("2026-07-20T00:00:00.000Z");
 const repository: TargetRepository = {
@@ -43,10 +45,12 @@ function createTargets(repositories: TargetRepository[] = [repository]): Synchro
 
 function createSyncRunStore(lastSuccess?: Date): SyncRunStore & {
   finishes: Array<{ id: number; input: FinishSyncRunInput }>;
+  notificationStatuses: Array<{ id: number; status: "failed" | "sent" }>;
   starts: StartSyncRunInput[];
 } {
   return {
     finishes: [],
+    notificationStatuses: [],
     starts: [],
     async findLastIncrementalOrFullSuccessFinishedAt() {
       return lastSuccess;
@@ -57,6 +61,9 @@ function createSyncRunStore(lastSuccess?: Date): SyncRunStore & {
     async startSyncRun(input) {
       this.starts.push(input);
       return 42;
+    },
+    async updateNotificationStatus(id, status) {
+      this.notificationStatuses.push({ id, status });
     },
   };
 }
@@ -336,7 +343,9 @@ describe("synchronize", () => {
       status: "partial_failure",
     });
     expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
-    expect(dependencies.syncRunStore.finishes[0]?.input.errorSummary).toBeUndefined();
+    expect(dependencies.syncRunStore.finishes[0]?.input.errorSummary).toBe(
+      "一部のリポジトリ同期に失敗しました",
+    );
   });
 
   it("records failure without API details when targets cannot be loaded", async () => {
@@ -366,5 +375,83 @@ describe("synchronize", () => {
       synchronize({ mode: "full", triggerType: "manual" }, dependencies),
     ).rejects.toThrow("sync run write failed");
     expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
+  });
+
+  it("records a sent notification after a scheduled sync", async () => {
+    const stores = createStores();
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+    const notifications: SynchronizationNotification[] = [];
+    const notifier: SlackNotifier = {
+      async send(notification) {
+        notifications.push(notification);
+      },
+    };
+
+    await synchronizeAndNotify(
+      { mode: "incremental", triggerType: "scheduled" },
+      {
+        ...dependencies,
+        actionUrl: "https://github.com/mytysoldier/output-pulse/actions/runs/123",
+        notifier,
+      },
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        actionUrl: "https://github.com/mytysoldier/output-pulse/actions/runs/123",
+        status: "success",
+        triggerType: "scheduled",
+      }),
+    ]);
+    expect(dependencies.syncRunStore.notificationStatuses).toEqual([{ id: 42, status: "sent" }]);
+  });
+
+  it("keeps the synchronization result when Slack notification fails", async () => {
+    const stores = createStores();
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+    const notifier: SlackNotifier = {
+      async send() {
+        throw new Error("Slack API token rejected");
+      },
+    };
+
+    const result = await synchronizeAndNotify(
+      { mode: "full", triggerType: "manual" },
+      { ...dependencies, notifier },
+    );
+
+    expect(result.status).toBe("success");
+    expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
+    expect(dependencies.syncRunStore.notificationStatuses).toEqual([{ id: 42, status: "failed" }]);
+  });
+
+  it("sends a sanitized failure notification before rethrowing a synchronization error", async () => {
+    const stores = createStores();
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+    const notifications: SynchronizationNotification[] = [];
+    dependencies.syncRunStore.finishSyncRun = async () => {
+      throw new Error("database URL contains secret");
+    };
+
+    await expect(
+      synchronizeAndNotify(
+        { mode: "full", triggerType: "manual" },
+        {
+          ...dependencies,
+          notifier: {
+            async send(notification) {
+              notifications.push(notification);
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("database URL contains secret");
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        errorSummary: "同期処理の実行に失敗しました",
+        status: "failure",
+      }),
+    ]);
   });
 });

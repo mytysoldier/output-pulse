@@ -109,4 +109,6 @@ flowchart TD
 - 機密情報を含まないエラー概要
 - GitHub Actions実行URL
 
-Slack送信だけが失敗した場合、データ同期結果は変更せず、`notification_status`へ記録する。通知失敗を理由に同期Workflowを失敗させず、再送もしない。
+Slack送信だけが失敗した場合、データ同期結果は変更せず、`notification_status`を`failed`へ記録する。通知成功時は`sent`を記録する。通知失敗を理由に同期Workflowを失敗させず、再送もしない。
+
+通知先はSlack AppのBot Tokenと個人のSlack User IDで決める。実行URLは`https://github.com/<owner>/<repo>/actions/runs/<run_id>`形式だけを通知本文へ含め、URL内の認証情報、ポート、クエリ、フラグメントを拒否する。リポジトリ名、Token、接続文字列、Slack APIエラー詳細は本文とDBへ保存しない。
