@@ -9,6 +9,8 @@
 ## Slack通知
 
 - 成功・失敗を毎回DMする
+- `SLACK_BOT_TOKEN`と`SLACK_USER_ID`をGitHub Actions Secretsへ設定する
+- Slack Appには対象ユーザーへのDM送信に必要な`chat:write`権限を付与する
 - 通知が来ない場合はGitHub Actionsの有効状態と履歴を確認する
 - Slack通知失敗は同期をRollbackせず、Workflowも失敗させない
 

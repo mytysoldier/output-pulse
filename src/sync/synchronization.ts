@@ -61,6 +61,7 @@ export interface SynchronizationResult {
   repositorySucceeded: number;
   repositoryTotal: number;
   status: Exclude<SyncRunStatus, "running">;
+  startedAt: Date;
   syncRunId: number;
   updatedCount: number;
 }
@@ -106,6 +107,7 @@ export async function synchronize(
       repositoryFailed: 0,
       repositorySucceeded: 0,
       repositoryTotal: 0,
+      startedAt,
       status: "failure",
       syncRunId,
       updatedCount: 0,
@@ -156,6 +158,7 @@ export async function synchronize(
     ...aggregate,
     period,
     status,
+    startedAt,
     syncRunId,
     updatedCount: aggregate.updatedCount,
   };

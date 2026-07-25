@@ -6,6 +6,7 @@ import { syncRuns } from "./schema/index.js";
 export type SyncRunStatus = "failure" | "partial_failure" | "running" | "success";
 export type SyncMode = "full" | "incremental" | "range";
 export type SyncTriggerType = "manual" | "scheduled";
+export type NotificationStatus = "failed" | "pending" | "sent";
 
 export interface StartSyncRunInput {
   requestedFrom?: Date;
@@ -32,6 +33,10 @@ export interface SyncRunStore {
   findLastIncrementalOrFullSuccessFinishedAt(): Promise<Date | undefined>;
   finishSyncRun(id: number, input: FinishSyncRunInput): Promise<void>;
   startSyncRun(input: StartSyncRunInput): Promise<number>;
+  updateNotificationStatus(
+    id: number,
+    status: Exclude<NotificationStatus, "pending">,
+  ): Promise<void>;
 }
 
 /** 同期の開始・結果だけを記録し、リポジトリ名やAPIエラー詳細は保存しないStoreを作成する。 */
@@ -90,6 +95,13 @@ export function createSyncRunStore(database: NodePgDatabase): SyncRunStore {
       }
 
       return syncRun.id;
+    },
+
+    async updateNotificationStatus(id, status) {
+      await database
+        .update(syncRuns)
+        .set({ notificationStatus: status })
+        .where(eq(syncRuns.id, id));
     },
   };
 }
