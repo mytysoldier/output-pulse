@@ -4,6 +4,7 @@ const SLACK_CHAT_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage";
 
 export interface SynchronizationNotification {
   actionUrl?: string;
+  errorSummary?: string;
   fetchedCount: number;
   finishedAt: Date;
   insertedCount: number;
@@ -69,6 +70,9 @@ export function formatSynchronizationNotification(
     `リポジトリ: 対象 ${notification.repositoryTotal} / 成功 ${notification.repositorySucceeded} / 失敗 ${notification.repositoryFailed}`,
     `件数: 取得 ${notification.fetchedCount} / 新規 ${notification.insertedCount} / 更新 ${notification.updatedCount}`,
     `GitHub API残量: ${notification.rateLimitRemaining ?? "取得不可"}`,
+    ...(notification.errorSummary === undefined
+      ? []
+      : [`エラー概要: ${notification.errorSummary}`]),
     `Actions: ${toSafeActionUrl(notification.actionUrl) ?? "利用不可"}`,
   ].join("\n");
 }
@@ -108,6 +112,11 @@ function toSafeActionUrl(value: string | undefined): string | undefined {
     const url = new URL(value);
     return url.protocol === "https:" &&
       url.hostname === "github.com" &&
+      url.port === "" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === "" &&
       /^\/[^/]+\/[^/]+\/actions\/runs\/\d+$/.test(url.pathname)
       ? url.toString()
       : undefined;

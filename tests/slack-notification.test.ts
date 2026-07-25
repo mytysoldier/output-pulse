@@ -7,6 +7,7 @@ describe("formatSynchronizationNotification", () => {
     const message = formatSynchronizationNotification({
       actionUrl: "https://github.com/mytysoldier/output-pulse/actions/runs/123",
       fetchedCount: 12,
+      errorSummary: "一部のリポジトリ同期に失敗しました",
       finishedAt: new Date("2026-07-20T01:00:00.000Z"),
       insertedCount: 3,
       period: {
@@ -27,12 +28,18 @@ describe("formatSynchronizationNotification", () => {
     expect(message).toContain("同期結果: 一部失敗");
     expect(message).toContain("実行: 手動 / 差分同期");
     expect(message).toContain("リポジトリ: 対象 3 / 成功 2 / 失敗 1");
+    expect(message).toContain("エラー概要: 一部のリポジトリ同期に失敗しました");
     expect(message).toContain("https://github.com/mytysoldier/output-pulse/actions/runs/123");
     expect(message).not.toContain("postgresql://");
     expect(message).not.toContain("xoxb-");
   });
 
-  it("does not include an unsafe Actions URL", () => {
+  it.each([
+    "https://example.com/?token=secret",
+    "https://token@github.com/o/r/actions/runs/123",
+    "https://github.com/o/r/actions/runs/123?token=secret",
+    "https://github.com/o/r/actions/runs/123#token=secret",
+  ])("does not include an unsafe Actions URL: %s", (actionUrl) => {
     const message = formatSynchronizationNotification({
       fetchedCount: 0,
       finishedAt: new Date("2026-07-20T01:00:00.000Z"),
@@ -46,7 +53,7 @@ describe("formatSynchronizationNotification", () => {
       syncMode: "full",
       triggerType: "manual",
       updatedCount: 0,
-      actionUrl: "https://example.com/?token=secret",
+      actionUrl,
     });
 
     expect(message).toContain("Actions: 利用不可");

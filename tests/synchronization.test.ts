@@ -343,7 +343,9 @@ describe("synchronize", () => {
       status: "partial_failure",
     });
     expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
-    expect(dependencies.syncRunStore.finishes[0]?.input.errorSummary).toBeUndefined();
+    expect(dependencies.syncRunStore.finishes[0]?.input.errorSummary).toBe(
+      "一部のリポジトリ同期に失敗しました",
+    );
   });
 
   it("records failure without API details when targets cannot be loaded", async () => {
@@ -421,5 +423,35 @@ describe("synchronize", () => {
     expect(result.status).toBe("success");
     expect(stores.persisted).toEqual(["commit:commit-1", "pr:PR_1", "issue:I_1"]);
     expect(dependencies.syncRunStore.notificationStatuses).toEqual([{ id: 42, status: "failed" }]);
+  });
+
+  it("sends a sanitized failure notification before rethrowing a synchronization error", async () => {
+    const stores = createStores();
+    const dependencies = createDependencies({ transactionRunner: createTransactionRunner(stores) });
+    const notifications: SynchronizationNotification[] = [];
+    dependencies.syncRunStore.finishSyncRun = async () => {
+      throw new Error("database URL contains secret");
+    };
+
+    await expect(
+      synchronizeAndNotify(
+        { mode: "full", triggerType: "manual" },
+        {
+          ...dependencies,
+          notifier: {
+            async send(notification) {
+              notifications.push(notification);
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("database URL contains secret");
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        errorSummary: "同期処理の実行に失敗しました",
+        status: "failure",
+      }),
+    ]);
   });
 });

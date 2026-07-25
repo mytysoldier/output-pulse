@@ -11,6 +11,8 @@
 - 成功・失敗を毎回DMする
 - `SLACK_BOT_TOKEN`と`SLACK_USER_ID`をGitHub Actions Secretsへ設定する
 - Slack Appには対象ユーザーへのDM送信に必要な`chat:write`権限を付与する
+- 同期は`pnpm start`で実行する。`SYNC_TRIGGER_TYPE`へ`scheduled`または`manual`、`SYNC_MODE`へ`incremental`、`range`、`full`を指定する
+- 期間指定では`SYNC_FROM`と`SYNC_TO`にISO 8601日時を指定する
 - 通知が来ない場合はGitHub Actionsの有効状態と履歴を確認する
 - Slack通知失敗は同期をRollbackせず、Workflowも失敗させない
 

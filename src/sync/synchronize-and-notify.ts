@@ -19,7 +19,29 @@ export async function synchronizeAndNotify(
   request: SynchronizationRequest,
   dependencies: SynchronizationNotificationDependencies,
 ): Promise<SynchronizationResult> {
-  const result = await synchronize(request, dependencies);
+  let result: SynchronizationResult;
+  try {
+    result = await synchronize(request, dependencies);
+  } catch (error) {
+    await sendNotification(
+      request,
+      {
+        errorSummary: "同期処理の実行に失敗しました",
+        fetchedCount: 0,
+        insertedCount: 0,
+        period: { from: request.from, to: request.to },
+        repositoryFailed: 0,
+        repositorySucceeded: 0,
+        repositoryTotal: 0,
+        startedAt: dependencies.now?.() ?? new Date(),
+        status: "failure",
+        syncRunId: 0,
+        updatedCount: 0,
+      },
+      dependencies,
+    );
+    throw error;
+  }
   const notificationStatus = await sendNotification(request, result, dependencies);
 
   try {
@@ -39,6 +61,7 @@ async function sendNotification(
   try {
     await dependencies.notifier.send({
       actionUrl: dependencies.actionUrl,
+      errorSummary: result.errorSummary,
       fetchedCount: result.fetchedCount,
       finishedAt: dependencies.now?.() ?? new Date(),
       insertedCount: result.insertedCount,
