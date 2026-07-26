@@ -46,4 +46,21 @@ describe("Output Pulse Grafana dashboard", () => {
     expect(queryText).not.toMatch(/\bapp\./);
     expect(queryText).not.toMatch(/\b(repository_id|github_url|github_repository_id)\b/);
   });
+
+  it("formats prior-period changes as percentages and preserves JST timestamp boundaries", async () => {
+    const dashboard = await readDashboard();
+    const stats = dashboard.panels.filter((panel) => panel.type === "stat");
+    const queries = dashboard.panels
+      .flatMap((panel) => panel.targets ?? [])
+      .map((target) => target.rawSql ?? "")
+      .join("\n");
+
+    expect(stats).toHaveLength(4);
+    expect(JSON.stringify(stats).match(/"value":"percentunit"/g)).toHaveLength(4);
+    expect(queries).toContain(
+      "date_trunc('week', metric_date::timestamp) AT TIME ZONE 'Asia/Tokyo'",
+    );
+    expect(queries).not.toContain("first_closed_at AT TIME ZONE 'Asia/Tokyo'");
+    expect(queries).not.toContain("last_synced_at AT TIME ZONE 'Asia/Tokyo'");
+  });
 });
