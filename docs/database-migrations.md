@@ -50,12 +50,17 @@ pnpm build
 
 ## 本番適用
 
-1. Migrationを含むPRをmainへマージする
-2. `Database Migration` Workflowを手動実行する
-3. GitHub Environmentの承認を行う
-4. `DATABASE_MIGRATION_URL`を使って未適用Migrationを適用する
-5. Migration履歴と公開Viewを検証する
-6. 成功／失敗をSlack DMへ通知する
+`Database Migration` Workflowは`workflow_dispatch`専用であり、`main`から起動した場合だけ実行する。定期同期WorkflowからMigrationを実行してはならない。
+
+事前にGitHub Repository Settingsで`production` Environmentを作成し、必要に応じてRequired reviewersを設定する。そのEnvironment Secretとして`DATABASE_MIGRATION_URL`を登録する。Slack通知用の`SLACK_BOT_TOKEN`と`SLACK_USER_ID`はRepository Secretへ登録する。
+
+1. Migrationを含むPRをレビューしてmainへマージする
+2. Actionsの`Database Migration`をmainから手動実行する
+3. `production` Environmentの承認を行う
+4. `pnpm db:check`でMigration履歴とSchemaの整合性を確認する
+5. `DATABASE_MIGRATION_URL`を使って`pnpm db:migrate`を実行し、DrizzleのMigration履歴にないSQLだけを適用する
+6. Migration履歴と公開Viewを検証する
+7. 成功／失敗をSlack DMへ通知する（Slack送信失敗はMigrationの結果を変更しない）
 
 Migration用接続文字列はGitHub Actions Environment Secretへ保存し、Collector用・Grafana用接続情報と分離する。
 

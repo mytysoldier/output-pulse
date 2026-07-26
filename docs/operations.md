@@ -24,6 +24,15 @@
 4. データ欠落が疑われる場合は期間指定同期を実行する
 5. 集計規則を変更した場合は全再同期またはView再計算を検討する
 
+## 本番DB Migration
+
+- `Database Migration` Workflowは手動実行専用で、mainのレビュー済みMigrationだけを対象にする
+- `production` Environmentへ承認ルールを設定し、`DATABASE_MIGRATION_URL`はEnvironment Secretとして保存する
+- WorkflowはDrizzleのMigration履歴を確認してから未適用Migrationだけを適用する
+- 同じMigrationを再実行しても、適用済みのMigrationは再実行されない
+- 失敗時は自動再試行やRollbackをせず、Actionsログで適用済みMigrationを確認して前進修正用の新規Migrationを作成する
+- Migration成功・失敗はSlack DMで確認する。Slack通知だけの失敗はMigration失敗として扱わない
+
 ## データ保持と容量
 
 - イベントデータは無期限保存する
