@@ -1,0 +1,81 @@
+name: Synchronize GitHub activity
+
+on:
+  schedule:
+    # GitHub ActionsのcronはUTC。JST 08:00、14:00、22:00に実行する。
+    - cron: "0 23 * * *"
+    - cron: "0 5 * * *"
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      sync_mode:
+        description: "同期モード"
+        required: true
+        default: incremental
+        type: choice
+        options:
+          - incremental
+          - range
+          - full
+      sync_from:
+        description: "期間指定の開始日時（ISO 8601、rangeで必須）"
+        required: false
+        type: string
+      sync_to:
+        description: "期間指定の終了日時（ISO 8601、rangeで必須）"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: output-pulse-synchronization
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.COLLECTOR_DATABASE_URL }}
+      GH_READ_TOKEN: ${{ secrets.GH_READ_TOKEN }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+      SYNC_FROM: ${{ inputs.sync_from }}
+      SYNC_MODE: ${{ inputs.sync_mode || 'incremental' }}
+      SYNC_TO: ${{ inputs.sync_to }}
+      SYNC_TRIGGER_TYPE: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate synchronization inputs
+        run: |
+          node --input-type=module -e '
+            const { SYNC_FROM, SYNC_MODE, SYNC_TO } = process.env;
+            const isValidDate = (value) => value !== undefined && value !== "" && !Number.isNaN(new Date(value).getTime());
+
+            if (SYNC_MODE === "range") {
+              if (!isValidDate(SYNC_FROM) || !isValidDate(SYNC_TO) || new Date(SYNC_FROM) > new Date(SYNC_TO)) {
+                throw new Error("期間指定同期には有効な開始日時と終了日時が必要です");
+              }
+            } else if (SYNC_FROM || SYNC_TO) {
+              throw new Error("期間は期間指定同期でのみ指定できます");
+            }
+          '
+
+      - name: Synchronize GitHub activity
+        run: pnpm start

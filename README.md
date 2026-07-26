@@ -55,6 +55,25 @@ pnpm build
 
 `.env`には秘密情報を保存し、Gitへコミットしないでください。各環境変数の利用開始は後続Issueで実装します。
 
+## GitHub Actionsで同期する
+
+GitHub ActionsはJST 08:00、14:00、22:00に差分同期を実行します。定刻実行は遅延する可能性があるため、Slack DMで成功通知が継続していることを確認してください。
+
+実行前に、リポジトリのActions Secretsへ次を設定します。値はWorkflowのログやリポジトリへ記載しません。
+
+| Secret | 用途 |
+| --- | --- |
+| `GH_READ_TOKEN` | GitHub APIの読み取り用Fine-grained Personal Access Token |
+| `COLLECTOR_DATABASE_URL` | Collector権限を持つ本番PostgreSQLの接続文字列 |
+| `SLACK_BOT_TOKEN` | 同期結果をDMするSlack Bot Token |
+| `SLACK_USER_ID` | 同期結果の送信先SlackユーザーID |
+
+手動で実行するには、GitHubの **Actions** から **Synchronize GitHub activity** を選び、**Run workflow** を実行します。
+
+- `incremental`: 最終成功時刻から48時間重ねて差分同期します。
+- `range`: `sync_from` と `sync_to` にISO 8601日時を両方入力して、指定期間を同期します。開始日時が終了日時より後、または日時が不正な場合はDB接続前に失敗します。
+- `full`: GitHub APIで取得可能な全期間を再同期します。期間入力は空欄にします。
+
 ## ローカルPostgreSQL
 
 Docker Desktopなど、Docker Compose v2を利用できる環境が必要です。本番Neonへの接続は不要です。
