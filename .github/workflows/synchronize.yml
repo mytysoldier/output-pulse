@@ -1,0 +1,104 @@
+name: Synchronize GitHub activity
+
+on:
+  schedule:
+    # GitHub ActionsのcronはUTC。JST 08:00、14:00、22:00に実行する。
+    - cron: "0 23 * * *"
+    - cron: "0 5 * * *"
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      sync_mode:
+        description: "同期モード"
+        required: true
+        default: incremental
+        type: choice
+        options:
+          - incremental
+          - range
+          - full
+      sync_from:
+        description: "期間指定の開始日時（ISO 8601、rangeで必須）"
+        required: false
+        type: string
+      sync_to:
+        description: "期間指定の終了日時（ISO 8601、rangeで必須）"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: output-pulse-synchronization
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      INPUT_SYNC_FROM: ${{ inputs.sync_from }}
+      SYNC_MODE: ${{ inputs.sync_mode || 'incremental' }}
+      INPUT_SYNC_TO: ${{ inputs.sync_to }}
+      SYNC_TRIGGER_TYPE: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Validate synchronization inputs
+        run: |
+          node --input-type=module -e '
+            const { INPUT_SYNC_FROM, SYNC_MODE, INPUT_SYNC_TO } = process.env;
+            const SYNC_FROM = INPUT_SYNC_FROM || undefined;
+            const SYNC_TO = INPUT_SYNC_TO || undefined;
+            const iso8601DateTime = /^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00)$/;
+            const isValidDate = (value) => {
+              const match = value?.match(iso8601DateTime);
+              if (match === null || match === undefined || Number.isNaN(new Date(value).getTime())) {
+                return false;
+              }
+
+              const [year, month, day] = match.slice(1, 4).map(Number);
+              const calendarDate = new Date(Date.UTC(year, month - 1, day));
+              return calendarDate.getUTCFullYear() === year && calendarDate.getUTCMonth() === month - 1 && calendarDate.getUTCDate() === day;
+            };
+
+            if (SYNC_MODE === "range") {
+              if (!isValidDate(SYNC_FROM) || !isValidDate(SYNC_TO) || new Date(SYNC_FROM) > new Date(SYNC_TO)) {
+                throw new Error("期間指定同期には有効な開始日時と終了日時が必要です");
+              }
+            } else if (SYNC_FROM || SYNC_TO) {
+              throw new Error("期間は期間指定同期でのみ指定できます");
+            }
+          '
+
+      - name: Synchronize GitHub activity
+        env:
+          DATABASE_URL: ${{ secrets.COLLECTOR_DATABASE_URL }}
+          GH_READ_TOKEN: ${{ secrets.GH_READ_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+        run: |
+          if [[ -n "$INPUT_SYNC_FROM" ]]; then
+            export SYNC_FROM="$INPUT_SYNC_FROM"
+          fi
+          if [[ -n "$INPUT_SYNC_TO" ]]; then
+            export SYNC_TO="$INPUT_SYNC_TO"
+          fi
+          pnpm start
