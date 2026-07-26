@@ -25,10 +25,10 @@ jobs:
             exit 1
           fi
 
-      - name: Check out main
+      - name: Check out approved revision
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Set up pnpm
