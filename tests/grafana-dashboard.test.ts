@@ -57,6 +57,9 @@ describe("Output Pulse Grafana dashboard", () => {
 
     expect(stats).toHaveLength(4);
     expect(JSON.stringify(stats).match(/"value":"percentunit"/g)).toHaveLength(4);
+    expect(
+      JSON.stringify(stats).match(/\$__timeTo\(\)::timestamptz - \$__timeFrom\(\)::timestamptz/g),
+    ).toHaveLength(4);
     expect(queries).toContain(
       "date_trunc('week', metric_date::timestamp) AT TIME ZONE 'Asia/Tokyo'",
     );
