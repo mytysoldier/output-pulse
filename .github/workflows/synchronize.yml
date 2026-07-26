@@ -38,10 +38,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      DATABASE_URL: ${{ secrets.COLLECTOR_DATABASE_URL }}
-      GH_READ_TOKEN: ${{ secrets.GH_READ_TOKEN }}
-      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
       INPUT_SYNC_FROM: ${{ inputs.sync_from }}
       SYNC_MODE: ${{ inputs.sync_mode || 'incremental' }}
       INPUT_SYNC_TO: ${{ inputs.sync_to }}
@@ -71,7 +67,17 @@ jobs:
             const { INPUT_SYNC_FROM, SYNC_MODE, INPUT_SYNC_TO } = process.env;
             const SYNC_FROM = INPUT_SYNC_FROM || undefined;
             const SYNC_TO = INPUT_SYNC_TO || undefined;
-            const isValidDate = (value) => value !== undefined && value !== "" && !Number.isNaN(new Date(value).getTime());
+            const iso8601DateTime = /^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00)$/;
+            const isValidDate = (value) => {
+              const match = value?.match(iso8601DateTime);
+              if (match === null || match === undefined || Number.isNaN(new Date(value).getTime())) {
+                return false;
+              }
+
+              const [year, month, day] = match.slice(1, 4).map(Number);
+              const calendarDate = new Date(Date.UTC(year, month - 1, day));
+              return calendarDate.getUTCFullYear() === year && calendarDate.getUTCMonth() === month - 1 && calendarDate.getUTCDate() === day;
+            };
 
             if (SYNC_MODE === "range") {
               if (!isValidDate(SYNC_FROM) || !isValidDate(SYNC_TO) || new Date(SYNC_FROM) > new Date(SYNC_TO)) {
@@ -83,6 +89,11 @@ jobs:
           '
 
       - name: Synchronize GitHub activity
+        env:
+          DATABASE_URL: ${{ secrets.COLLECTOR_DATABASE_URL }}
+          GH_READ_TOKEN: ${{ secrets.GH_READ_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
         run: |
           if [[ -n "$INPUT_SYNC_FROM" ]]; then
             export SYNC_FROM="$INPUT_SYNC_FROM"
