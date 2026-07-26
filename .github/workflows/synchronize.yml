@@ -42,9 +42,9 @@ jobs:
       GH_READ_TOKEN: ${{ secrets.GH_READ_TOKEN }}
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
-      SYNC_FROM: ${{ inputs.sync_from }}
+      INPUT_SYNC_FROM: ${{ inputs.sync_from }}
       SYNC_MODE: ${{ inputs.sync_mode || 'incremental' }}
-      SYNC_TO: ${{ inputs.sync_to }}
+      INPUT_SYNC_TO: ${{ inputs.sync_to }}
       SYNC_TRIGGER_TYPE: ${{ github.event_name == 'schedule' && 'scheduled' || 'manual' }}
     steps:
       - name: Check out repository
@@ -62,10 +62,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build application
+        run: pnpm build
+
       - name: Validate synchronization inputs
         run: |
           node --input-type=module -e '
-            const { SYNC_FROM, SYNC_MODE, SYNC_TO } = process.env;
+            const { INPUT_SYNC_FROM, SYNC_MODE, INPUT_SYNC_TO } = process.env;
+            const SYNC_FROM = INPUT_SYNC_FROM || undefined;
+            const SYNC_TO = INPUT_SYNC_TO || undefined;
             const isValidDate = (value) => value !== undefined && value !== "" && !Number.isNaN(new Date(value).getTime());
 
             if (SYNC_MODE === "range") {
@@ -78,4 +83,11 @@ jobs:
           '
 
       - name: Synchronize GitHub activity
-        run: pnpm start
+        run: |
+          if [[ -n "$INPUT_SYNC_FROM" ]]; then
+            export SYNC_FROM="$INPUT_SYNC_FROM"
+          fi
+          if [[ -n "$INPUT_SYNC_TO" ]]; then
+            export SYNC_TO="$INPUT_SYNC_TO"
+          fi
+          pnpm start
