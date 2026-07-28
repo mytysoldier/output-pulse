@@ -2,9 +2,10 @@
 
 ## 定期運用
 
-- GitHub ActionsをJST 08:00、14:00、22:00に実行する
-- cronは遅延する可能性があり、定刻実行を保証しない
-- Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、成功DMが継続していることを運用者が確認する
+- 現在は本番Secretsと外部サービスの設定前のため、定期同期を停止している
+- 同期はGitHub Actionsの **Synchronize GitHub activity** から手動実行する
+- 本番運用を開始する際は、JST 08:00、14:00、22:00のscheduleをWorkflowへ復元する。cronは遅延する可能性があり、定刻実行を保証しない
+- Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、定期運用開始後は成功DMが継続していることを確認する
 
 ## Slack通知
 
