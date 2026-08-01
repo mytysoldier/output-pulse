@@ -1,0 +1,94 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "type": "text",
+      "title": "Output Pulse",
+      "gridPos": { "h": 3, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "GitHub活動の公開ダッシュボードです。期間は右上の時間範囲で変更できます。\n\nデータが表示されない場合は、同期がまだ完了していないか、指定期間に実績がありません。最終同期の状態は下部で確認できます。"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "コミット",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [{ "matcher": { "id": "byName", "options": "前期間比" }, "properties": [{ "id": "unit", "value": "percentunit" }] }] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "WITH current_period AS (SELECT COALESCE(SUM(commit_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz AND metric_at <= $__timeTo()::timestamptz), prior_period AS (SELECT COALESCE(SUM(commit_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz - ($__timeTo()::timestamptz - $__timeFrom()::timestamptz) AND metric_at < $__timeFrom()::timestamptz) SELECT current_period.value AS \"実績\", CASE WHEN prior_period.value = 0 THEN NULL ELSE (current_period.value - prior_period.value)::numeric / prior_period.value END AS \"前期間比\" FROM current_period, prior_period;", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "作成PR",
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [{ "matcher": { "id": "byName", "options": "前期間比" }, "properties": [{ "id": "unit", "value": "percentunit" }] }] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "WITH current_period AS (SELECT COALESCE(SUM(pull_request_created_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz AND metric_at <= $__timeTo()::timestamptz), prior_period AS (SELECT COALESCE(SUM(pull_request_created_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz - ($__timeTo()::timestamptz - $__timeFrom()::timestamptz) AND metric_at < $__timeFrom()::timestamptz) SELECT current_period.value AS \"実績\", CASE WHEN prior_period.value = 0 THEN NULL ELSE (current_period.value - prior_period.value)::numeric / prior_period.value END AS \"前期間比\" FROM current_period, prior_period;", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "マージPR",
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [{ "matcher": { "id": "byName", "options": "前期間比" }, "properties": [{ "id": "unit", "value": "percentunit" }] }] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "WITH current_period AS (SELECT COALESCE(SUM(pull_request_merged_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz AND metric_at <= $__timeTo()::timestamptz), prior_period AS (SELECT COALESCE(SUM(pull_request_merged_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz - ($__timeTo()::timestamptz - $__timeFrom()::timestamptz) AND metric_at < $__timeFrom()::timestamptz) SELECT current_period.value AS \"実績\", CASE WHEN prior_period.value = 0 THEN NULL ELSE (current_period.value - prior_period.value)::numeric / prior_period.value END AS \"前期間比\" FROM current_period, prior_period;", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "完了Issue",
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 3 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "mappings": [], "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] } }, "overrides": [{ "matcher": { "id": "byName", "options": "前期間比" }, "properties": [{ "id": "unit", "value": "percentunit" }] }] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto", "wideLayout": true },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "WITH current_period AS (SELECT COALESCE(SUM(completed_issue_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz AND metric_at <= $__timeTo()::timestamptz), prior_period AS (SELECT COALESCE(SUM(completed_issue_count), 0) AS value FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom()::timestamptz - ($__timeTo()::timestamptz - $__timeFrom()::timestamptz) AND metric_at < $__timeFrom()::timestamptz) SELECT current_period.value AS \"実績\", CASE WHEN prior_period.value = 0 THEN NULL ELSE (current_period.value - prior_period.value)::numeric / prior_period.value END AS \"前期間比\" FROM current_period, prior_period;", "refId": "A" }]
+    },
+    {
+      "type": "barchart",
+      "title": "日別実績",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "axisCenteredZero": false, "axisLabel": "件数", "axisPlacement": "auto", "fillOpacity": 80, "lineWidth": 1, "stacking": { "mode": "normal", "group": "A" } }, "mappings": [], "unit": "short" }, "overrides": [] },
+      "options": { "barRadius": 0, "barWidth": 0.8, "fullHighlight": false, "groupWidth": 0.7, "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true }, "orientation": "auto", "showValue": "auto", "stacking": "normal", "tooltip": { "mode": "multi", "sort": "none" }, "xTickLabelRotation": 0, "xTickLabelSpacing": 0 },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "SELECT metric_date AS \"日付\", commit_count AS \"コミット\", pull_request_created_count AS \"作成PR\", pull_request_merged_count AS \"マージPR\", completed_issue_count AS \"完了Issue\" FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom() AND metric_at <= $__timeTo() ORDER BY metric_date;", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "週別推移",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 19 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "custom": { "drawStyle": "line", "fillOpacity": 15, "lineInterpolation": "smooth", "lineWidth": 2, "pointSize": 5, "showPoints": "auto", "spanNulls": false, "stacking": { "mode": "normal", "group": "A" } }, "mappings": [], "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "time_series", "rawSql": "SELECT date_trunc('week', metric_date::timestamp) AT TIME ZONE 'Asia/Tokyo' AS time, SUM(commit_count) AS \"コミット\", SUM(pull_request_created_count) AS \"作成PR\", SUM(pull_request_merged_count) AS \"マージPR\", SUM(completed_issue_count) AS \"完了Issue\" FROM dashboard.daily_metrics WHERE metric_at >= $__timeFrom() AND metric_at <= $__timeTo() GROUP BY 1 ORDER BY 1;", "refId": "A" }]
+    },
+    {
+      "type": "table",
+      "title": "完了Issue",
+      "gridPos": { "h": 10, "w": 16, "x": 0, "y": 29 },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }, "mappings": [] }, "overrides": [] },
+      "options": { "cellHeight": "sm", "showHeader": true, "sortBy": [{ "desc": true, "displayName": "完了日時" }] },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "SELECT title AS \"タイトル\", first_closed_at AS \"完了日時\" FROM dashboard.completed_issues WHERE first_closed_at >= $__timeFrom() AND first_closed_at <= $__timeTo() ORDER BY first_closed_at DESC;", "refId": "A" }]
+    },
+    {
+      "type": "table",
+      "title": "最終同期状態",
+      "gridPos": { "h": 10, "w": 8, "x": 16, "y": 29 },
+      "fieldConfig": { "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" }, "inspect": false }, "mappings": [{ "options": { "failure": { "color": "red", "index": 0, "text": "失敗" }, "partial_failure": { "color": "orange", "index": 1, "text": "一部失敗" }, "success": { "color": "green", "index": 2, "text": "成功" } }, "type": "value" }] }, "overrides": [] },
+      "options": { "cellHeight": "sm", "showHeader": true },
+      "targets": [{ "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }, "format": "table", "rawSql": "SELECT last_synced_at AS \"最終同期日時\", status AS \"状態\", trigger_type AS \"実行種別\", sync_mode AS \"同期モード\", repository_succeeded AS \"成功リポジトリ数\", repository_failed AS \"失敗リポジトリ数\" FROM dashboard.sync_status;", "refId": "A" }]
+    }
+  ],
+  "refresh": false,
+  "schemaVersion": 41,
+  "tags": ["output-pulse"],
+  "templating": { "list": [{ "current": { "selected": true, "text": "PostgreSQL", "value": "${DS_POSTGRES}" }, "hide": 2, "includeAll": false, "label": "データソース", "multi": false, "name": "DS_POSTGRES", "options": [], "query": "postgres", "refresh": 1, "regex": "", "type": "datasource" }] },
+  "time": { "from": "now-30d", "to": "now" },
+  "timepicker": { "refresh_intervals": [], "time_options": ["7d", "30d", "90d", "1y", "all"] },
+  "timezone": "Asia/Tokyo",
+  "title": "Output Pulse",
+  "uid": "output-pulse",
+  "version": 1,
+  "weekStart": "monday"
+}
