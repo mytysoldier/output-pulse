@@ -67,7 +67,25 @@ GitHub ActionsのRepository Secretsへ、次を登録する。同期Workflowは`
 | `SLACK_BOT_TOKEN` | 同期結果通知用のSlack Bot Token |
 | `SLACK_USER_ID` | 通知先SlackユーザーID |
 
-Secretsを登録したら、GitHub Actionsの**Synchronize GitHub activity**を`main`から手動実行し、`incremental`を選択する。成功後は、Neon SQL Editorで`app.sync_runs`と各活動テーブルへの記録を確認する。同期ログやSlack通知にはSecrets・接続文字列・収集対象のPrivateリポジトリ名を出力しない。
+初回同期の前に、Neon SQL Editorで初期tracked actorを登録する。GitHubのログイン名ではなく、不変のGitHubユーザーIDを主キーとして使用する。
+
+```sql
+INSERT INTO app.tracked_actors (
+  github_user_id,
+  github_login,
+  actor_type,
+  enabled
+)
+VALUES (36390056, 'mytysoldier', 'user', true)
+ON CONFLICT (github_user_id) DO UPDATE
+SET
+  github_login = EXCLUDED.github_login,
+  actor_type = EXCLUDED.actor_type,
+  enabled = EXCLUDED.enabled,
+  updated_at = now();
+```
+
+登録後、GitHub Actionsの**Synchronize GitHub activity**を`main`から手動実行し、`incremental`を選択する。actor未登録のまま初回同期を実行済みの場合は、初回対象の過去30日を指定した`range`同期を1回実行して補正する。成功後は、Neon SQL Editorで`app.sync_runs`と各活動テーブルへの記録を確認する。同期ログやSlack通知にはSecrets・接続文字列・収集対象のPrivateリポジトリ名を出力しない。
 
 ## Grafana専用Role
 
