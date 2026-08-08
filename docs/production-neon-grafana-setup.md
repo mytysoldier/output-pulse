@@ -34,12 +34,15 @@ Migrationは`app` Schema、`dashboard` Schema、公開View、`grafana_reader` Ro
 
 ## Collector専用Roleと初回同期
 
-同期Workflowには、Migration用・Grafana用とは別のCollector専用LOGIN Roleを使用する。Neonの**SQL Editor**で、Migration用Roleを使い、強力な固有パスワードを設定して次を実行する。パスワード、接続文字列、TokenはSQL履歴、Git、Issue、チャットへ残さない。
+同期Workflowには、Migration用・Grafana用とは別のCollector専用LOGIN Roleを使用する。パスワードをSQL Editor履歴へ残さないため、Neon Consoleの**Tables**画面で**Create role**を選び、`output_pulse_collector`を作成する。パスワードはConsoleで生成・保存し、SQL Editorへ入力しない。
+
+Consoleで作成したRoleには`neon_superuser`が付与されるため、作成直後にNeonの**SQL Editor**でMigration用Roleを使い、次の権限設定を実行する。既存のCollector Roleを移行する場合も同じSQLを実行する。パスワード、接続文字列、TokenはGit、Issue、チャットへ残さない。
 
 ```sql
-CREATE ROLE output_pulse_collector
+REVOKE neon_superuser FROM output_pulse_collector;
+
+ALTER ROLE output_pulse_collector
   LOGIN
-  PASSWORD '強力な固有パスワード'
   NOSUPERUSER
   NOCREATEDB
   NOCREATEROLE
@@ -52,11 +55,17 @@ REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA app FROM output_pulse_collector;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA app FROM output_pulse_collector;
 
 GRANT USAGE ON SCHEMA app TO output_pulse_collector;
-GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA app TO output_pulse_collector;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA app TO output_pulse_collector;
+GRANT SELECT ON app.tracked_actors TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.repositories TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.commits TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.pull_requests TO output_pulse_collector;
+GRANT INSERT ON app.pull_request_events TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.completed_issues TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.sync_runs TO output_pulse_collector;
+GRANT USAGE, SELECT ON SEQUENCE app.sync_runs_id_seq TO output_pulse_collector;
 ```
 
-Role作成後、Neonの**Connect**画面で`output_pulse_collector`を選び、TLS接続文字列を取得する。`sslmode=require`を維持する。
+権限設定後、Neonの**Connect**画面で`output_pulse_collector`を選び、TLS接続文字列を取得する。`sslmode=require`を維持する。
 
 GitHub ActionsのRepository Secretsへ、次を登録する。同期Workflowは`production` Environmentを参照しないため、CollectorとSlackの値はEnvironment SecretではなくRepository Secretに保存する。
 
