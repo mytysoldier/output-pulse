@@ -62,7 +62,7 @@ GitHub ActionsのRepository Secretsへ、次を登録する。同期Workflowは`
 
 | Secret | 用途 |
 | --- | --- |
-| `GH_READ_TOKEN` | Metadata、Contents、Issues、Pull requestsのReadだけを持つFine-grained PAT |
+| `GH_READ_TOKEN` | Resource ownerを`mytysoldier`、Repository accessを**All repositories**に設定し、Metadata、Contents、Issues、Pull requestsのReadだけを持つFine-grained PAT |
 | `COLLECTOR_DATABASE_URL` | `output_pulse_collector`のTLS接続文字列 |
 | `SLACK_BOT_TOKEN` | 同期結果通知用のSlack Bot Token |
 | `SLACK_USER_ID` | 通知先SlackユーザーID |
