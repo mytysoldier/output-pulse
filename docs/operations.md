@@ -50,6 +50,7 @@
 - データソースはPostgreSQLを選び、SSL modeを`require`にする。接続テスト後、`app` Schemaのテーブルへアクセスできないことと、`dashboard` Schemaの3 Viewを`SELECT`できることを確認する。
 - [`grafana/dashboards/output-pulse.json`](../grafana/dashboards/output-pulse.json) をGrafanaへImportし、PostgreSQLデータソースを割り当てる。JSONには接続先、パスワード、リポジトリ識別情報を含めない。
 - 外部共有リンクは発行しない。Grafana Cloudの組織へログインできる個人利用者だけがDashboardを閲覧する。
+- 過去に外部共有を有効化していた場合は、Grafana CloudのDashboard共有設定で外部共有を無効化して共有リンクを無効にする。無効化後、以前の共有URLをログアウト状態で開き、閲覧できないことを確認する。
 - 本番運用開始前に、30日表示の4数値、日別積み上げ、週別推移、完了Issue、最終同期状態をPCとスマートフォンで目視確認する。空状態と同期失敗状態も表示内容を確認する。
 - JSONを更新した場合はExport結果を`grafana/dashboards/`へ反映し、秘密情報が含まれないことを確認する。
 
