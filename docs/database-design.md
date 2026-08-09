@@ -4,13 +4,13 @@
 
 - PostgreSQLを使用し、イベントデータを無期限保存する
 - GitHub IDまたはSHAを一意キーにして冪等にUpsertする
-- Grafanaはイベントデータを公開用View経由で都度SQL集計する
+- Grafanaはイベントデータを専用View経由で都度SQL集計する
 - MVPでは日別集計テーブルやMaterialized Viewを作らない
 
 ## Schema境界
 
 - `app`: 収集処理が利用する内部テーブル
-- `dashboard`: Grafanaへ公開するView
+- `dashboard`: Grafana専用のView
 - Grafana専用ユーザーには`dashboard` SchemaのViewへの`SELECT`のみを許可する
 
 ```mermaid
@@ -20,7 +20,7 @@ flowchart LR
     EVENTS --> VIEWS["dashboard schema / views"]
     GRAFANA["Grafana read-only user"] -->|"SELECT only"| VIEWS
     GRAFANA -.->|"アクセス不可"| APP
-    VIEWER["一般閲覧者"] --> CLOUD["Grafana Cloud"]
+    VIEWER["ログイン済みの個人利用者"] --> CLOUD["Grafana Cloud"]
     CLOUD --> GRAFANA
 ```
 
@@ -125,7 +125,7 @@ erDiagram
 | enabled | 同期対象か |
 | last_synced_at | 最終成功日時 |
 
-リポジトリ名は原則保存しない。APIアクセスに必要で保存が不可避な場合は内部Schemaに限定し、公開View、ログ、Slackへ出さない。
+リポジトリ名は原則保存しない。APIアクセスに必要で保存が不可避な場合は内部Schemaに限定し、Grafana専用View、ログ、Slackへ出さない。
 
 ### `app.commits`
 
@@ -190,7 +190,7 @@ erDiagram
 | error_summary | 機密情報を除いた概要 |
 | notification_status | Slack通知結果 |
 
-## 公開View
+## Grafana専用View
 
 - `dashboard.daily_metrics`: JST日別の4指標
 - `dashboard.completed_issues`: Issueタイトルと完了日時

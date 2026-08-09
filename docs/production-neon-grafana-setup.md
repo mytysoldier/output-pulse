@@ -4,7 +4,7 @@
 
 Output Pulseの本番PostgreSQLとGrafana Cloudダッシュボードを、安全な権限分離で構成する。
 
-この手順には接続文字列、パスワード、Token、公開URLを記載しない。これらの値はGitHub Secrets、Grafana Cloud、または承認済みの秘密情報管理手段だけで管理する。
+この手順には接続文字列、パスワード、Tokenを記載しない。これらの値はGitHub Secrets、Grafana Cloud、または承認済みの秘密情報管理手段だけで管理する。
 
 ## 構成
 
@@ -12,7 +12,7 @@ Output Pulseの本番PostgreSQLとGrafana Cloudダッシュボードを、安全
 | --- | --- | --- | --- |
 | Migration | Neonの初期管理Role | DDL、Role、Grant | `production` Environment Secret `DATABASE_MIGRATION_URL` |
 | Collector | Collector専用Role | `app` Schemaへの最小限の読み書き | Repository Secret `COLLECTOR_DATABASE_URL` |
-| Grafana Cloud | `grafana_cloud` | `dashboard` Schemaの公開ViewへのSELECTだけ | Grafana Cloudデータソース。接続情報の管理場所は `production` Environment Secret `GRAFANA_DATABASE_URL` として記録する |
+| Grafana Cloud | `grafana_cloud` | `dashboard` SchemaのGrafana専用ViewへのSELECTだけ | Grafana Cloudデータソース。接続情報の管理場所は `production` Environment Secret `GRAFANA_DATABASE_URL` として記録する |
 
 Grafana用の接続情報は同期Workflowから利用しない。`GRAFANA_DATABASE_URL`は、接続情報の保管場所をリポジトリから追跡するためのSecret名であり、接続文字列やパスワード自体をREADME、Issue、Dashboard JSONへ記載してはならない。
 
@@ -30,7 +30,7 @@ Grafana用の接続情報は同期Workflowから利用しない。`GRAFANA_DATAB
 3. GitHub Actionsの**Database Migration**を`main`から手動実行する。
 4. 実行結果が成功したことを確認する。
 
-Migrationは`app` Schema、`dashboard` Schema、公開View、`grafana_reader` Roleを作成する。Migrationは未適用分だけを実行するため、成功済みのMigrationを再適用しない。
+Migrationは`app` Schema、`dashboard` Schema、Grafana専用View、`grafana_reader` Roleを作成する。Migrationは未適用分だけを実行するため、成功済みのMigrationを再適用しない。
 
 ## Collector専用Roleと初回同期
 
@@ -121,17 +121,16 @@ Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え
 
 初回同期前は、数値カードが0、日別・週別パネルがNo dataと表示される。これは正常な空状態である。
 
-## 公開前の確認
+## 本番運用前の確認
 
-外部共有を有効化する前に、次を確認する。
+Grafana CloudへログインしてDashboardを閲覧する前に、次を確認する。
 
 - #41の手動同期が成功し、Grafanaの4指標がDB集計値と一致する
 - 完了Issue、最終同期日時、同期ステータスが正しく表示される
 - リポジトリ名、ID、URL、接続情報、Tokenが表示されない
 - PCとスマートフォンで主要情報が読める
-- Grafana Cloudの外部共有で、ダッシュボード変数を含むパネルが想定どおり表示される
-
-外部共有URLは誰でも閲覧できる可能性があるため、README、Issue、Dashboard JSON、Actionsログへ保存しない。公開は#16の受け入れ条件を再確認してから行う。
+- PCとスマートフォンのログイン済み表示で、ダッシュボード変数を含むパネルが想定どおり表示される
+- 外部共有リンクが未発行である
 
 ## 定期同期の確認
 

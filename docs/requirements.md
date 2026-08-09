@@ -2,19 +2,19 @@
 
 ## 結論
 
-MVPでは、`mytysoldier`個人アカウント配下のGitHub活動を1日3回収集し、Neon PostgreSQLへ無期限保存して、Grafana Cloudの外部共有ダッシュボードで一般公開する。
+MVPでは、`mytysoldier`個人アカウント配下のGitHub活動を1日3回収集し、Neon PostgreSQLへ無期限保存して、Grafana Cloudへログインした個人利用者が確認する。
 
 ## 目的
 
 - PR、コミット、完了Issueの実績を期間別に把握する
 - 何件実施したか、何を完了したかをグラフィカルに振り返る
-- Privateリポジトリを集計しつつ、リポジトリ情報を公開しない
+- Privateリポジトリを集計しつつ、リポジトリ情報を表示しない
 - サーバーを常時運用せず、無料枠中心で継続運用する
 
 ## 想定ユーザー
 
 - データ所有者・運用者: `mytysoldier`
-- 閲覧者: インターネット上の一般ユーザー
+- 閲覧者: Grafana Cloudへログインしたデータ所有者・運用者
 
 ## 対象リポジトリ
 
@@ -87,7 +87,7 @@ Assigneeは判定に使用しない。再オープン後に再Closeされても�
 
 ## MVPで作らないもの
 
-- ログイン、複数ユーザー、Organization対応
+- 独自ログイン、複数ユーザー、Organization対応
 - GitHub外のタスク管理、AI要約
 - 独自Web UI、VPS、Terraform
 - 課金、広告SDK、解析SDK

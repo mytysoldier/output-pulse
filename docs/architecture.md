@@ -17,12 +17,12 @@ flowchart LR
     subgraph Data["データ保存"]
         DB[("Neon PostgreSQL")]
         INTERNAL["app schema"]
-        PUBLIC["dashboard schema / public views"]
+        PUBLIC["dashboard schema / Grafana views"]
     end
 
-    subgraph Presentation["公開・通知"]
+    subgraph Presentation["個人閲覧・通知"]
         GRAFANA["Grafana Cloud"]
-        VIEWER["一般閲覧者"]
+        VIEWER["ログイン済みの個人利用者"]
         SLACK["Slack DM"]
     end
 
@@ -48,7 +48,7 @@ sequenceDiagram
     participant DB as Neon PostgreSQL
     participant Slack as Slack
     participant Grafana as Grafana Cloud
-    participant Viewer as 一般閲覧者
+    participant Viewer as ログイン済みの個人利用者
 
     Actions->>Collector: 定期・手動同期を開始
     Collector->>GitHub: コミット・PR・Issueを取得
@@ -57,7 +57,7 @@ sequenceDiagram
     Collector->>DB: 同期結果を記録
     Collector->>Slack: 成功・失敗をDM
     Viewer->>Grafana: ダッシュボードを表示
-    Grafana->>DB: 公開ViewをSELECT
+    Grafana->>DB: Grafana専用ViewをSELECT
     DB-->>Grafana: 期間別集計結果
     Grafana-->>Viewer: グラフ・完了Issueを表示
 ```
@@ -73,7 +73,7 @@ sequenceDiagram
 | Migration | Drizzle Kit | SchemaとSQL MigrationをGit管理できる |
 | DB | Neon PostgreSQL | 小規模・断続的負荷と無料枠の相性が良い |
 | Scheduler | GitHub Actions | 常駐サーバーが不要 |
-| 可視化 | Grafana Cloud | PostgreSQLを直接集計し外部共有できる |
+| 可視化 | Grafana Cloud | PostgreSQLを直接集計し、ログイン済みの個人利用者が確認できる |
 | 通知 | Slack Web API | 個人WorkspaceのDMへ通知できる |
 | Test | Vitest | TypeScriptとの統合が容易 |
 | ローカルDB | Docker Compose | PostgreSQL環境を再現しやすい |
@@ -97,7 +97,7 @@ sequenceDiagram
 
 - GitHub APIやDrizzleを実行しない
 - Neon PostgreSQLへ読み取り専用ユーザーで直接接続する
-- 公開用Viewを期間指定SQLで集計し、ダッシュボードへ表示する
+- Grafana専用Viewを期間指定SQLで集計し、ダッシュボードへ表示する
 - 完成したDashboard JSONを`grafana/dashboards/`へExportしてGit管理する
 
 ## デプロイ方針

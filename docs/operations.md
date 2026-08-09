@@ -45,13 +45,13 @@
 ## Grafana設定
 
 - 本番Neon・Grafana Cloudの初期構成、Secret名、Role分離、Dashboard Importは[本番Neon・Grafana Cloudセットアップ手順](production-neon-grafana-setup.md)に従う
-- Grafana Cloudアカウント、Neon接続、外部共有は手動設定する
+- Grafana CloudアカウントとNeon接続は手動設定する。Dashboardはログイン済みの個人利用者だけが閲覧する
 - NeonではMigration用ユーザーでGrafana Cloud用の`LOGIN` Roleを作成し、`grafana_reader`を付与する。Grafana Cloudの接続先にはそのRoleのTLS接続文字列だけを入力する。
 - データソースはPostgreSQLを選び、SSL modeを`require`にする。接続テスト後、`app` Schemaのテーブルへアクセスできないことと、`dashboard` Schemaの3 Viewを`SELECT`できることを確認する。
 - [`grafana/dashboards/output-pulse.json`](../grafana/dashboards/output-pulse.json) をGrafanaへImportし、PostgreSQLデータソースを割り当てる。JSONには接続先、パスワード、リポジトリ識別情報を含めない。
-- 外部共有はDashboard単位で有効化する。公開URLをREADME、Issue、Dashboard JSONへ記録しない。
-- 公開前に、30日表示の4数値、日別積み上げ、週別推移、完了Issue、最終同期状態をPCとスマートフォンで目視確認する。空状態と同期失敗状態も表示内容を確認する。
-- JSONを更新した場合はExport結果を`grafana/dashboards/`へ反映し、公開前に秘密情報が含まれないことを確認する。
+- 外部共有リンクは発行しない。Grafana Cloudの組織へログインできる個人利用者だけがDashboardを閲覧する。
+- 本番運用開始前に、30日表示の4数値、日別積み上げ、週別推移、完了Issue、最終同期状態をPCとスマートフォンで目視確認する。空状態と同期失敗状態も表示内容を確認する。
+- JSONを更新した場合はExport結果を`grafana/dashboards/`へ反映し、秘密情報が含まれないことを確認する。
 
 ## ローカル開発
 

@@ -1,6 +1,6 @@
 # Output Pulse
 
-GitHub上の個人開発実績を定期収集し、Grafana Cloudで一般公開する個人用ダッシュボードです。
+GitHub上の個人開発実績を定期収集し、Grafana Cloudへログインして確認する個人用ダッシュボードです。
 
 要件と技術設計は以下を参照してください。実装の進捗は[Roadmap Issue #3](https://github.com/mytysoldier/output-pulse/issues/3)で管理します。
 
