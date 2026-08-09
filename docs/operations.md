@@ -2,10 +2,10 @@
 
 ## 定期運用
 
-- 現在は本番Secretsと外部サービスの設定前のため、定期同期を停止している
-- 同期はGitHub Actionsの **Synchronize GitHub activity** から手動実行する
-- 本番運用を開始する際は、JST 08:00、14:00、22:00のscheduleをWorkflowへ復元する。cronは遅延する可能性があり、定刻実行を保証しない
-- Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、定期運用開始後は成功DMが継続していることを確認する
+- GitHub Actionsの **Synchronize GitHub activity** がJST 08:00、14:00、22:00に差分同期を実行する。cronは遅延する可能性があり、定刻実行を保証しない
+- 手動実行では`incremental`、`range`、`full`を選択できる
+- Actions履歴とSlack DMで、定期同期が少なくとも3回連続して成功していることを確認する。失敗時は障害対応の手順に従う
+- Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、成功DMが途切れた場合はWorkflowの有効状態と履歴を確認する
 
 ## Slack通知
 
@@ -19,7 +19,7 @@
 
 ## 障害対応
 
-1. Actions実行URLで失敗工程を確認する
+1. Actions履歴から対象の実行を開き、失敗工程を確認する。cron遅延・未実行が疑われる場合は、直近の定期実行とWorkflowの有効状態も確認する
 2. GitHub API残量、Token期限、Neon接続、Slack App権限を確認する
 3. 修正後に手動差分同期を実行する
 4. データ欠落が疑われる場合は期間指定同期を実行する

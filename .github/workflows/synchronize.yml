@@ -1,6 +1,9 @@
 name: Synchronize GitHub activity
 
 on:
+  schedule:
+    # GitHub Actions cron is evaluated in UTC: JST 08:00, 14:00, and 22:00.
+    - cron: "0 5,13,23 * * *"
   workflow_dispatch:
     inputs:
       sync_mode:

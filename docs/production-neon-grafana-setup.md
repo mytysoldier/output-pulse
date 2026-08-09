@@ -133,6 +133,6 @@ Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え
 
 外部共有URLは誰でも閲覧できる可能性があるため、README、Issue、Dashboard JSON、Actionsログへ保存しない。公開は#16の受け入れ条件を再確認してから行う。
 
-## 未完了の運用準備
+## 定期同期の確認
 
-- #40: 初回手動同期とSlack確認の後、定期同期を再開
+同期WorkflowはJST 08:00、14:00、22:00に実行される。schedule復元後はActions履歴とSlack DMで少なくとも3回の成功を確認し、`app.sync_runs`で重複保存がないことを確認する。cronは遅延する可能性があるため、定刻どおりに開始されない場合でも、直近の実行履歴を基準に確認する。
