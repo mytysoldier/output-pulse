@@ -73,7 +73,7 @@ flowchart LR
 - 失敗したリポジトリの途中データはRollbackする
 - 成功したリポジトリのデータはCommitする
 - 1件以上失敗した実行は`partial_failure`とする
-- Slackや公開Viewへ失敗リポジトリ名を出さない
+- SlackやGrafana専用Viewへ失敗リポジトリ名を出さない
 
 ## Issue同期
 
