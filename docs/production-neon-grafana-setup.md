@@ -32,6 +32,70 @@ Grafana用の接続情報は同期Workflowから利用しない。`GRAFANA_DATAB
 
 Migrationは`app` Schema、`dashboard` Schema、公開View、`grafana_reader` Roleを作成する。Migrationは未適用分だけを実行するため、成功済みのMigrationを再適用しない。
 
+## Collector専用Roleと初回同期
+
+同期Workflowには、Migration用・Grafana用とは別のCollector専用LOGIN Roleを使用する。パスワードをSQL Editor履歴へ残さないため、Neon Consoleの**Tables**画面で**Create role**を選び、`output_pulse_collector`を作成する。パスワードはConsoleで生成・保存し、SQL Editorへ入力しない。
+
+Consoleで作成したRoleには`neon_superuser`が付与されるため、作成直後にNeonの**SQL Editor**でMigration用Roleを使い、次の権限設定を実行する。既存のCollector Roleを移行する場合も同じSQLを実行する。パスワード、接続文字列、TokenはGit、Issue、チャットへ残さない。
+
+```sql
+REVOKE neon_superuser FROM output_pulse_collector;
+
+ALTER ROLE output_pulse_collector
+  LOGIN
+  NOSUPERUSER
+  NOCREATEDB
+  NOCREATEROLE
+  NOINHERIT
+  NOREPLICATION
+  NOBYPASSRLS;
+
+REVOKE ALL PRIVILEGES ON SCHEMA app FROM output_pulse_collector;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA app FROM output_pulse_collector;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA app FROM output_pulse_collector;
+
+GRANT USAGE ON SCHEMA app TO output_pulse_collector;
+GRANT SELECT ON app.tracked_actors TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.repositories TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.commits TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.pull_requests TO output_pulse_collector;
+GRANT INSERT ON app.pull_request_events TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.completed_issues TO output_pulse_collector;
+GRANT SELECT, INSERT, UPDATE ON app.sync_runs TO output_pulse_collector;
+GRANT USAGE, SELECT ON SEQUENCE app.sync_runs_id_seq TO output_pulse_collector;
+```
+
+権限設定後、Neonの**Connect**画面で`output_pulse_collector`を選び、TLS接続文字列を取得する。`sslmode=require`を維持する。
+
+GitHub ActionsのRepository Secretsへ、次を登録する。同期Workflowは`production` Environmentを参照しないため、CollectorとSlackの値はEnvironment SecretではなくRepository Secretに保存する。
+
+| Secret | 用途 |
+| --- | --- |
+| `GH_READ_TOKEN` | Resource ownerを`mytysoldier`、Repository accessを**All repositories**に設定し、Metadata、Contents、Issues、Pull requestsのReadだけを持つFine-grained PAT |
+| `COLLECTOR_DATABASE_URL` | `output_pulse_collector`のTLS接続文字列 |
+| `SLACK_BOT_TOKEN` | 同期結果通知用のSlack Bot Token |
+| `SLACK_USER_ID` | 通知先SlackユーザーID |
+
+初回同期の前に、Neon SQL Editorで初期tracked actorを登録する。GitHubのログイン名ではなく、不変のGitHubユーザーIDを主キーとして使用する。
+
+```sql
+INSERT INTO app.tracked_actors (
+  github_user_id,
+  github_login,
+  actor_type,
+  enabled
+)
+VALUES (36390056, 'mytysoldier', 'user', true)
+ON CONFLICT (github_user_id) DO UPDATE
+SET
+  github_login = EXCLUDED.github_login,
+  actor_type = EXCLUDED.actor_type,
+  enabled = EXCLUDED.enabled,
+  updated_at = now();
+```
+
+登録後、GitHub Actionsの**Synchronize GitHub activity**を`main`から手動実行し、`incremental`を選択する。actor未登録のまま初回同期を実行済みの場合は、初回対象の過去30日を指定した`range`同期を1回実行して補正する。成功後は、Neon SQL Editorで`app.sync_runs`と各活動テーブルへの記録を確認する。同期ログやSlack通知にはSecrets・接続文字列・収集対象のPrivateリポジトリ名を出力しない。
+
 ## Grafana専用Role
 
 Neonの**SQL Editor**で、強力な固有パスワードを使ってGrafana専用のログインRoleを作成する。パスワード文字列はSQL履歴、Git、Issue、チャットへ残さない。
@@ -71,7 +135,4 @@ Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え
 
 ## 未完了の運用準備
 
-- #41: GitHub読み取りToken、Collector専用Role、`GH_READ_TOKEN`、`COLLECTOR_DATABASE_URL`、初回手動同期
-- Slack通知用Secretsの設定と送信確認
-- #16: 実データ表示、外部共有、PC／スマートフォン確認
 - #40: 初回手動同期とSlack確認の後、定期同期を再開
