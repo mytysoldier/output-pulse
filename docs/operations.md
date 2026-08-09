@@ -4,7 +4,7 @@
 
 - GitHub Actionsの **Synchronize GitHub activity** がJST 08:00、14:00、22:00に差分同期を実行する。cronは遅延する可能性があり、定刻実行を保証しない
 - 手動実行では`incremental`、`range`、`full`を選択できる
-- Actions履歴とSlack DMで、定期同期が少なくとも3回連続して成功していることを確認する。失敗時は障害対応の手順に従う
+- Actions履歴とSlack DMで、定期同期が少なくとも1回成功していることを確認する。失敗時は障害対応の手順に従う
 - Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、成功DMが途切れた場合はWorkflowの有効状態と履歴を確認する
 
 ## Slack通知
