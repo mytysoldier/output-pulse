@@ -1,156 +1,57 @@
 # Output Pulse
 
-GitHub上の個人開発実績を定期収集し、Grafana Cloudへログインして確認する個人用ダッシュボードです。
+Output Pulseは、GitHub上の個人開発の活動実績を定期収集し、Grafana Cloudで振り返るための個人用ダッシュボードです。
 
-要件と技術設計は以下を参照してください。本番移行の確認結果と既知制約は[Release Issue #18](https://github.com/mytysoldier/output-pulse/issues/18)で管理します。
+コミット、Pull Request、完了IssueをNeon PostgreSQLへ保存し、期間ごとの実績や推移を確認できます。常駐サーバーを持たず、GitHub Actionsで収集処理を実行します。
+
+## できること
+
+- コミット、作成PR、マージPR、完了Issueを期間ごとに集計する
+- 日別・週別の活動推移と、完了Issueのタイトル・日時を確認する
+- GitHub Actionsによる定期同期と、Slack DMによる実行結果の通知を受け取る
+- Privateリポジトリを含めて集計しつつ、Grafanaにはリポジトリ名やGitHub URLを表示しない
+
+閲覧はGrafana Cloudへログインした個人利用者に限定します。外部共有リンクは発行しません。
+
+## システム構成
+
+```mermaid
+flowchart LR
+    GITHUB["GitHub"]
+    ACTIONS["GitHub Actions"]
+    COLLECTOR["TypeScript Collector"]
+    NEON[("Neon PostgreSQL")]
+    GRAFANA["Grafana Cloud"]
+    SLACK["Slack DM"]
+    USER["個人利用者"]
+
+    ACTIONS --> COLLECTOR
+    COLLECTOR -->|"活動データを取得"| GITHUB
+    COLLECTOR -->|"実績を保存"| NEON
+    COLLECTOR -->|"同期結果を通知"| SLACK
+    GRAFANA -->|"読み取り専用で集計"| NEON
+    USER -->|"ログインして閲覧"| GRAFANA
+```
+
+## 詳細ドキュメント
+
+### アプリケーション設計
 
 - [要件定義](docs/requirements.md)
 - [アーキテクチャ](docs/architecture.md)
 - [データベース設計](docs/database-design.md)
 - [同期仕様](docs/synchronization.md)
 - [セキュリティ設計](docs/security.md)
+
+### セットアップ・運用
+
+- [ローカル開発手順](docs/local-development.md)
 - [運用設計](docs/operations.md)
 - [DBマイグレーション手順](docs/database-migrations.md)
 - [本番Neon・Grafana Cloudセットアップ手順](docs/production-neon-grafana-setup.md)
 
-## 開発を始める
+### リポジトリ運用
 
-Node.js 24.18.0以上とpnpm 11.7.0以上を使用します。asdfでは[`.tool-versions`](.tool-versions)、その他のNode.jsバージョン管理ツールでは[`.node-version`](.node-version)を参照してください。
-
-asdfを使用する場合は、リポジトリ直下でNode.js 24.18.0をインストールします。
-
-```bash
-asdf install
-```
-
-pnpmはCorepackで管理します。初回だけ次を実行してください。
-
-```bash
-corepack enable
-```
-
-asdfを使用する場合は、Corepackの有効化後にshimを再生成します。
-
-```bash
-asdf reshim nodejs 24.18.0
-```
-
-Node.jsとpnpmのバージョンを確認します。
-
-```bash
-node --version
-pnpm --version
-```
-
-`node --version`が`v24.18.0`、`pnpm --version`が`11.7.0`以上であることを確認してから、依存パッケージをインストールします。
-
-```bash
-pnpm install
-cp .env.example .env
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-`.env`にはローカル開発用の秘密情報だけを保存し、Gitへコミットしないでください。本番の値はGitHub Actions Secretsで管理します。
-
-## GitHub Actionsで同期する
-
-GitHub ActionsはJST 08:00、14:00、22:00に差分同期を実行します。定刻実行は遅延する可能性があるため、Actions履歴とSlack DMで成功通知が継続していることを確認してください。失敗時は[運用設計](docs/operations.md)の障害対応に従ってください。
-
-実行前に、リポジトリのActions Secretsへ次を設定します。値はWorkflowのログやリポジトリへ記載しません。
-
-| Secret | 用途 |
-| --- | --- |
-| `GH_READ_TOKEN` | GitHub APIの読み取り用Fine-grained Personal Access Token |
-| `COLLECTOR_DATABASE_URL` | Collector権限を持つ本番PostgreSQLの接続文字列 |
-| `SLACK_BOT_TOKEN` | 同期結果をDMするSlack Bot Token |
-| `SLACK_USER_ID` | 同期結果の送信先SlackユーザーID |
-
-手動で実行するには、GitHubの **Actions** から **Synchronize GitHub activity** を選び、**Run workflow** を実行します。
-
-- `incremental`: 最終成功時刻から48時間重ねて差分同期します。
-- `range`: `sync_from` と `sync_to` にISO 8601日時を両方入力して、指定期間を同期します。開始日時が終了日時より後、または日時が不正な場合はDB接続前に失敗します。
-- `full`: GitHub APIで取得可能な全期間を再同期します。期間入力は空欄にします。
-
-## ローカルPostgreSQL
-
-Docker Desktopなど、Docker Compose v2を利用できる環境が必要です。本番Neonへの接続は不要です。
-
-`.env`を用意したうえで、開発用PostgreSQLを起動します。
-
-```bash
-cp .env.example .env
-docker compose up -d postgres
-```
-
-起動完了はhealthcheckで確認できます。
-
-```bash
-docker compose ps
-docker compose exec postgres pg_isready -U output_pulse -d output_pulse
-```
-
-ローカルからの接続は、次のコマンドで確認できます。
-
-```bash
-docker compose exec postgres psql -U output_pulse -d output_pulse -c 'SELECT current_database(), current_user;'
-```
-
-停止してもデータは名前付きVolumeに保持されます。再開する場合は、再度`docker compose up -d postgres`を実行してください。
-
-```bash
-docker compose stop postgres
-```
-
-ローカルデータを完全に初期化したい場合だけ、次を実行します。この操作はVolume内のデータを削除します。
-
-```bash
-docker compose down -v
-```
-
-## 開発方針
-
-AIエージェントを中心に、GitHub Issueでタスクを管理しながら個人開発を進めるためのテンプレートです。
-
-このテンプレートは、以下のような進め方を前提にしています。
-
-- まず企画・要件・技術設計をIssueで整理する
-- 初期リリースで作ること、作らないことを明確にする
-- 実装Issueを小さく分ける
-- AIエージェントはIssue単位で実装する
-- 実装後は検証、コミット、push、PR作成まで進める
-- レビューコメント対応後は再レビューを依頼する
-
-## 使い方
-
-1. このリポジトリをテンプレートとして新しいリポジトリを作成する
-2. `docs/planning-template.md` をコピーして、作りたいサービスの計画を書く
-3. `.github/ISSUE_TEMPLATE/design.md` から設計Issueを作る
-4. 設計Issueで初期リリースの範囲と技術方針を確定する
-5. `.github/ISSUE_TEMPLATE/implementation.md` から実装Issueを小さく作る
-6. AIエージェントにIssue単位で実装を依頼する
-
-## 推奨AI開発フロー
-
-- Codexを実装、テスト、Git操作、PR作成の主担当にする
-- GitHub Actionsでlint、型チェック、テスト、buildを必須確認にする
-- CodexのPRレビューをすべてのPRで使い、GitHub Actionsと人間の確認を補完する
-- GeminiやAntigravityは、別解の検討、資料・画像を含む調査、UI案の比較などの補助に使う
-- 複数のAIエージェントで同じブランチを同時に編集しない
-
-GeminiやAntigravityを使う場合も、実装の最終責任とPR作成はCodexに集約すると、変更の経緯とレビュー対象を追いやすくなります。
-
-## AI向けルール
-
-AIエージェント向けの作業ルールは [AGENTS.md](AGENTS.md) にまとめています。
-
-Codexを含むAIコーディングエージェントには、まず `AGENTS.md` と対象Issueを読ませてから作業させてください。
-
-## 基本方針
-
-個人開発では、完成度よりも公開できる初期リリースを優先します。
-
-AIには大きな曖昧な依頼を渡さず、Issueごとに目的、実装範囲、受け入れ条件、スコープ外を明記します。これにより、AIが勝手に機能を増やしたり、技術スタックを変更したりすることを防ぎます。
+- [開発ガイド](docs/development-guide.md)
+- [AIエージェント向けルール](AGENTS.md)
+- [本番移行の確認結果と既知制約（Release Issue #18）](https://github.com/mytysoldier/output-pulse/issues/18)

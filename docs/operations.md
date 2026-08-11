@@ -7,6 +7,31 @@
 - Actions履歴とSlack DMで、定期同期が少なくとも1回成功していることを確認する。失敗時は障害対応の手順に従う
 - Publicリポジトリのscheduled workflowは長期無活動で無効化される可能性があるため、成功DMが途切れた場合はWorkflowの有効状態と履歴を確認する
 
+## 同期Workflowの手動実行
+
+GitHubの **Actions** から **Synchronize GitHub activity** を選び、**Run workflow** を実行する。
+
+| 実行モード | 用途 |
+| --- | --- |
+| `incremental` | 最終成功時刻から48時間重ねて差分同期する |
+| `range` | `sync_from`と`sync_to`にISO 8601日時を両方入力し、指定期間を同期する |
+| `full` | GitHub APIで取得可能な全期間を再同期する。期間入力は空欄にする |
+
+`range`は開始日時が終了日時より後、または日時が不正な場合、DB接続前に失敗する。
+
+## 同期WorkflowのSecrets
+
+同期Workflowの実行前に、Repository Actions Secretsへ次を設定する。値はWorkflowのログやリポジトリへ記載しない。
+
+| Secret | 用途 |
+| --- | --- |
+| `GH_READ_TOKEN` | GitHub APIの読み取り用Fine-grained Personal Access Token |
+| `COLLECTOR_DATABASE_URL` | Collector権限を持つ本番PostgreSQLの接続文字列 |
+| `SLACK_BOT_TOKEN` | 同期結果をDMするSlack Bot Token |
+| `SLACK_USER_ID` | 同期結果の送信先SlackユーザーID |
+
+Secretの作成方法とRole分離は[本番Neon・Grafana Cloudセットアップ手順](production-neon-grafana-setup.md)を参照する。
+
 ## Slack通知
 
 - 成功・失敗を毎回DMする
