@@ -11,7 +11,6 @@ GitHub上の個人開発実績を定期収集し、Grafana Cloudへログイン�
 - [セキュリティ設計](docs/security.md)
 - [運用設計](docs/operations.md)
 - [DBマイグレーション手順](docs/database-migrations.md)
-- [本番Neon・Grafana Cloudセットアップ手順](docs/production-neon-grafana-setup.md)
 
 ## 開発を始める
 

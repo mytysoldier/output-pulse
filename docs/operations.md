@@ -44,7 +44,6 @@
 
 ## Grafana設定
 
-- 本番Neon・Grafana Cloudの初期構成、Secret名、Role分離、Dashboard Importは[本番Neon・Grafana Cloudセットアップ手順](production-neon-grafana-setup.md)に従う
 - Grafana CloudアカウントとNeon接続は手動設定する。Dashboardはログイン済みの個人利用者だけが閲覧する
 - NeonではMigration用ユーザーでGrafana Cloud用の`LOGIN` Roleを作成し、`grafana_reader`を付与する。Grafana Cloudの接続先にはそのRoleのTLS接続文字列だけを入力する。
 - データソースはPostgreSQLを選び、SSL modeを`require`にする。接続テスト後、`app` Schemaのテーブルへアクセスできないことと、`dashboard` Schemaの3 Viewを`SELECT`できることを確認する。
