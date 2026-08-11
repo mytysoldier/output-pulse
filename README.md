@@ -2,7 +2,7 @@
 
 GitHub上の個人開発実績を定期収集し、Grafana Cloudへログインして確認する個人用ダッシュボードです。
 
-要件と技術設計は以下を参照してください。実装の進捗は[Roadmap Issue #3](https://github.com/mytysoldier/output-pulse/issues/3)で管理します。
+要件と技術設計は以下を参照してください。本番移行の確認結果と既知制約は[Release Issue #18](https://github.com/mytysoldier/output-pulse/issues/18)で管理します。
 
 - [要件定義](docs/requirements.md)
 - [アーキテクチャ](docs/architecture.md)
@@ -54,7 +54,7 @@ pnpm test
 pnpm build
 ```
 
-`.env`には秘密情報を保存し、Gitへコミットしないでください。各環境変数の利用開始は後続Issueで実装します。
+`.env`にはローカル開発用の秘密情報だけを保存し、Gitへコミットしないでください。本番の値はGitHub Actions Secretsで管理します。
 
 ## GitHub Actionsで同期する
 

@@ -43,4 +43,5 @@ Grafana用ユーザーには内部Schemaの`USAGE`、テーブル参照、DDL、
 - Grafana Dashboardは専用Viewだけを参照する
 - 自由入力のSQLやリポジトリ単位の変数をDashboardへ追加しない
 - Dashboard JSONとログイン済みの表示内容を目視確認する
+- 外部共有リンクは発行せず、Grafana Cloudへログインした個人利用者だけが閲覧する
 - 大量アクセス対策はMVP対象外だが、DB使用量を観測して将来キャッシュ等を検討する

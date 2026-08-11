@@ -12,9 +12,9 @@ Output Pulseの本番PostgreSQLとGrafana Cloudダッシュボードを、安全
 | --- | --- | --- | --- |
 | Migration | Neonの初期管理Role | DDL、Role、Grant | `production` Environment Secret `DATABASE_MIGRATION_URL` |
 | Collector | Collector専用Role | `app` Schemaへの最小限の読み書き | Repository Secret `COLLECTOR_DATABASE_URL` |
-| Grafana Cloud | `grafana_cloud` | `dashboard` SchemaのGrafana専用ViewへのSELECTだけ | Grafana Cloudデータソース。接続情報の管理場所は `production` Environment Secret `GRAFANA_DATABASE_URL` として記録する |
+| Grafana Cloud | `grafana_cloud` | `dashboard` SchemaのGrafana専用ViewへのSELECTだけ | Grafana Cloudのデータソース設定。パスワードはSecure JSON Dataで管理し、接続情報はGitHub Actionsから利用しない |
 
-Grafana用の接続情報は同期Workflowから利用しない。`GRAFANA_DATABASE_URL`は、接続情報の保管場所をリポジトリから追跡するためのSecret名であり、接続文字列やパスワード自体をREADME、Issue、Dashboard JSONへ記載してはならない。
+Grafana用の接続情報はGitHub Actionsから利用しない。接続文字列やパスワード自体をREADME、Issue、Dashboard JSONへ記載してはならない。
 
 ## Neonプロジェクト
 
@@ -108,7 +108,7 @@ GRANT grafana_reader TO grafana_cloud;
 
 `grafana_reader`はMigrationで作成され、`dashboard.daily_metrics`、`dashboard.completed_issues`、`dashboard.sync_status`へのSELECTだけを持つ。`grafana_cloud`には`app` Schemaの参照、DDL、DMLを付与しない。
 
-Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え、Connection poolingをOFFにしたDirect connectionを取得する。接続文字列は必要に応じて`production` Environment Secret `GRAFANA_DATABASE_URL`へ保存する。
+Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え、Connection poolingをOFFにしたDirect connectionを取得する。接続情報はGrafana Cloudのデータソース設定にだけ入力し、パスワードはSecure JSON Dataで管理する。
 
 ## Grafana CloudデータソースとDashboard
 
@@ -125,7 +125,7 @@ Role作成後、Neonの**Connect**画面でRoleを`grafana_cloud`へ切り替え
 
 Grafana CloudへログインしてDashboardを閲覧する前に、次を確認する。
 
-- #41の手動同期が成功し、Grafanaの4指標がDB集計値と一致する
+- #17の手動同期確認で、Grafanaの4指標がDB集計値と一致している
 - 完了Issue、最終同期日時、同期ステータスが正しく表示される
 - リポジトリ名、ID、URL、接続情報、Tokenが表示されない
 - PCとスマートフォンで主要情報が読める
